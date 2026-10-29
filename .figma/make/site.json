@@ -1,0 +1,10 @@
+{
+  "description": "This web application offers a customizable platform for UNC Charlotte students to create and share visually appealing content with a green-themed background.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

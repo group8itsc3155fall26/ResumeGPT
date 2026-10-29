@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Generate a tailored resume with ResumeGPT."
+    />
+    <title>ResumeGPT — Resume Builder</title>
+    <link rel="stylesheet" href="/homepage.css" />
+    <link rel="stylesheet" href="/resume.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/homepage.html">
+        <span class="brand-mark">R</span>
+        <span>ResumeGPT</span>
+      </a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="/homepage.html">Profile</a>
+        <a class="active" href="/resume.html">Resume</a>
+        <a href="/project-library.html">Projects</a>
+      </nav>
+      <a class="logout" href="/">Log out</a>
+    </header>
+
+    <main class="builder-page">
+      <section class="builder-intro">
+        <div>
+          <p class="eyebrow">AI resume studio</p>
+          <h1>Build a resume that sounds like you.</h1>
+        </div>
+        <p>
+          Tell ResumeGPT about the role you want, choose the skills to
+          highlight, and get a tailored first draft.
+        </p>
+      </section>
+
+      <div class="builder-shell">
+        <aside class="skills-panel">
+          <div class="skills-heading">
+            <p class="section-label">Your profile</p>
+            <h2>Choose skills</h2>
+            <p>Select the strengths you want ResumeGPT to emphasize.</p>
+          </div>
+
+          <fieldset class="skill-list">
+            <legend class="sr-only">Skills to include</legend>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="React" checked />
+              <span>React</span>
+            </label>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="TypeScript" checked />
+              <span>TypeScript</span>
+            </label>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="Python" />
+              <span>Python</span>
+            </label>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="SQL" />
+              <span>SQL</span>
+            </label>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="Communication" />
+              <span>Communication</span>
+            </label>
+            <label class="skill-option">
+              <input type="checkbox" name="skill" value="Leadership" />
+              <span>Leadership</span>
+            </label>
+          </fieldset>
+
+          <div class="profile-summary">
+            <span class="mini-avatar">JB</span>
+            <span>
+              <strong>John Bob</strong>
+              <small>Computer Science · 2027</small>
+            </span>
+          </div>
+        </aside>
+
+        <section class="chat-panel" aria-label="ResumeGPT conversation">
+          <div class="chat-header">
+            <div class="assistant-identity">
+              <span class="assistant-mark">R</span>
+              <span>
+                <strong>ResumeGPT</strong>
+                <small><span class="online-dot"></span> Ready to help</small>
+              </span>
+            </div>
+            <button class="new-chat" id="new-chat" type="button">
+              New draft
+            </button>
+          </div>
+
+          <div class="conversation" id="conversation" aria-live="polite">
+            <article class="message assistant-message">
+              <span class="message-avatar">R</span>
+              <div class="message-content">
+                <strong>ResumeGPT</strong>
+                <p>
+                  What kind of role are you applying for? Share the job,
+                  company, or experience you want your resume to emphasize.
+                </p>
+                <div class="prompt-suggestions" aria-label="Prompt suggestions">
+                  <button type="button" data-prompt="Create a resume for a software engineering internship.">
+                    Software engineering internship
+                  </button>
+                  <button type="button" data-prompt="Tailor my resume for an entry-level data analyst role.">
+                    Entry-level data analyst
+                  </button>
+                  <button type="button" data-prompt="Highlight my coursework and project leadership experience.">
+                    Highlight project leadership
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <form class="prompt-form" id="prompt-form">
+            <label class="sr-only" for="resume-prompt">
+              Tell ResumeGPT what resume to create
+            </label>
+            <textarea
+              id="resume-prompt"
+              name="prompt"
+              placeholder="Describe the role you want to target..."
+              rows="3"
+              required
+            ></textarea>
+            <div class="prompt-actions">
+              <span id="skill-count">2 skills selected</span>
+              <button class="send-button" type="submit">
+                Generate resume
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <span>ResumeGPT</span>
+      <span>Built for UNC Charlotte students</span>
+    </footer>
+    <script src="/resume.js"></script>
+  </body>
+</html>

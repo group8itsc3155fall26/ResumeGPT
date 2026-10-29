@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Manage coursework and personal projects in ResumeGPT."
+    />
+    <title>ResumeGPT — Projects</title>
+    <link rel="stylesheet" href="/homepage.css" />
+    <link rel="stylesheet" href="/project-library.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/homepage.html">
+        <span class="brand-mark">R</span>
+        <span>ResumeGPT</span>
+      </a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="/homepage.html">Profile</a>
+        <a href="/resume.html">Resume</a>
+        <a class="active" href="/project-library.html">Projects</a>
+      </nav>
+      <a class="logout" href="/">Log out</a>
+    </header>
+
+    <main class="projects-page">
+      <section class="projects-hero">
+        <div>
+          <p class="eyebrow">Experience library</p>
+          <h1>Your work,<br />ready to use.</h1>
+          <p class="hero-copy">
+            Keep coursework and personal projects organized so ResumeGPT can
+            turn your experience into stronger resume bullets.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button class="import-button" id="open-canvas-import" type="button">
+            Import from Canvas
+          </button>
+          <button class="add-project-button" id="open-project-form" type="button">
+            <span aria-hidden="true">+</span>
+            Add project
+          </button>
+        </div>
+      </section>
+
+      <section class="project-workspace" aria-labelledby="projects-heading">
+        <div class="workspace-heading">
+          <div>
+            <p class="section-label">Saved experience</p>
+            <h2 id="projects-heading">Project library</h2>
+          </div>
+          <p id="project-count">3 projects</p>
+        </div>
+
+        <div class="filter-bar">
+          <label class="search-field">
+            <span class="sr-only">Search projects</span>
+            <span class="search-mark" aria-hidden="true"></span>
+            <input
+              id="project-search"
+              type="search"
+              placeholder="Search projects or skills"
+            />
+          </label>
+          <label class="filter-field">
+            <span>Course</span>
+            <select id="course-filter">
+              <option value="">All courses</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Semester</span>
+            <select id="semester-filter">
+              <option value="">All semesters</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Skill</span>
+            <select id="skill-filter">
+              <option value="">All skills</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="project-grid" id="project-grid"></div>
+
+        <div class="empty-state" id="empty-state" hidden>
+          <span class="empty-mark">R</span>
+          <h3 id="empty-title">No projects found</h3>
+          <p id="empty-copy">
+            Try adjusting your search or filters to find a saved project.
+          </p>
+          <button class="secondary-button" id="empty-action" type="button">
+            Clear filters
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>ResumeGPT</span>
+      <span>Built for UNC Charlotte students</span>
+    </footer>
+
+    <dialog class="agreement-dialog" id="agreement-dialog">
+      <div class="agreement-mark">R</div>
+      <p class="section-label">Before you continue</p>
+      <h2>Project storage agreement</h2>
+      <p>
+        ResumeGPT saves your project library in this browser so your work is
+        available when you return or log in again on this device.
+      </p>
+      <ul>
+        <li>Only add project information you are comfortable storing locally.</li>
+        <li>Do not include passwords, private keys, or sensitive personal data.</li>
+        <li>Clearing browser data will remove locally saved projects.</li>
+      </ul>
+      <label class="agreement-check">
+        <input id="agreement-checkbox" type="checkbox" />
+        <span>I understand and agree to use local project storage.</span>
+      </label>
+      <button class="agreement-button" id="accept-agreement" type="button" disabled>
+        Accept and continue
+      </button>
+    </dialog>
+
+    <dialog class="project-dialog" id="project-dialog">
+      <form id="project-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">New experience</p>
+            <h2 id="project-form-title">Add a project</h2>
+          </div>
+          <button
+            class="close-dialog"
+            id="close-project-form"
+            type="button"
+            aria-label="Close project form"
+          >
+            ×
+          </button>
+        </div>
+
+        <label class="form-field">
+          <span>Project title</span>
+          <input
+            name="title"
+            type="text"
+            placeholder="Niner Transit Tracker"
+            required
+          />
+        </label>
+
+        <div class="form-row">
+          <label class="form-field">
+            <span>Course</span>
+            <input
+              name="course"
+              type="text"
+              placeholder="ITSC 3155"
+              required
+            />
+          </label>
+          <label class="form-field">
+            <span>Semester</span>
+            <input
+              name="semester"
+              type="text"
+              placeholder="Fall 2026"
+              required
+            />
+          </label>
+        </div>
+
+        <label class="form-field">
+          <span>Description</span>
+          <textarea
+            name="description"
+            rows="4"
+            placeholder="What did you build, why did it matter, and what was the outcome?"
+            required
+          ></textarea>
+        </label>
+
+        <div class="form-row">
+          <label class="form-field">
+            <span>Your role</span>
+            <input
+              name="role"
+              type="text"
+              placeholder="Front-end developer"
+              required
+            />
+          </label>
+          <label class="form-field">
+            <span>Technologies</span>
+            <input
+              name="technologies"
+              type="text"
+              placeholder="React, Vite, Supabase"
+              required
+            />
+            <small>Separate each technology with a comma.</small>
+          </label>
+        </div>
+
+        <div class="skill-builder">
+          <div class="skill-builder-heading">
+            <div>
+              <span class="field-label">Skills</span>
+              <small>Choose suggestions or add your own.</small>
+            </div>
+            <button class="ai-suggest-button" id="ai-suggest-skills" type="button">
+              AI suggest skills
+            </button>
+          </div>
+          <div class="suggested-skills" aria-label="Skill suggestions">
+            <button type="button" data-skill-suggestion="Collaboration">Collaboration</button>
+            <button type="button" data-skill-suggestion="Problem Solving">Problem Solving</button>
+            <button type="button" data-skill-suggestion="Testing">Testing</button>
+            <button type="button" data-skill-suggestion="Documentation">Documentation</button>
+          </div>
+          <div class="custom-skill-row">
+            <label class="sr-only" for="custom-skill">Add a custom skill</label>
+            <input
+              id="custom-skill"
+              type="text"
+              placeholder="Type a skill"
+            />
+            <button id="add-custom-skill" type="button">Add</button>
+          </div>
+          <div class="selected-skills" id="selected-skills"></div>
+          <div class="ai-skill-review" id="ai-skill-review" hidden>
+            <div class="ai-review-heading">
+              <strong>AI suggested — verify</strong>
+              <span>Accept or dismiss each suggestion before saving.</span>
+            </div>
+            <div id="ai-skill-list"></div>
+          </div>
+        </div>
+
+        <label class="form-field">
+          <span>Links</span>
+          <input
+            name="links"
+            type="text"
+            placeholder="https://github.com/username/project, https://project.demo"
+          />
+          <small>Separate each URL with a comma.</small>
+        </label>
+
+        <label class="form-field file-field">
+          <span>Project file</span>
+          <input
+            name="projectFile"
+            type="file"
+            accept=".pdf,.doc,.docx,.txt,.zip,.png,.jpg,.jpeg"
+          />
+          <small id="file-help">
+            Optional. Files up to 1 MB are saved in this browser.
+          </small>
+        </label>
+
+        <p class="form-message" id="project-form-message" role="alert" hidden></p>
+
+        <div class="dialog-actions">
+          <button class="cancel-button" id="cancel-project-form" type="button">
+            Cancel
+          </button>
+          <button class="save-button" id="save-project" type="submit">
+            Save project
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="detail-dialog" id="detail-dialog">
+      <div class="detail-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label" id="detail-source">Project details</p>
+            <h2 id="detail-title"></h2>
+          </div>
+          <button
+            class="close-dialog"
+            id="close-detail"
+            type="button"
+            aria-label="Close project details"
+          >
+            ×
+          </button>
+        </div>
+        <p class="detail-meta" id="detail-meta"></p>
+        <div class="detail-section">
+          <h3>Description</h3>
+          <p id="detail-description"></p>
+        </div>
+        <div class="detail-columns">
+          <div class="detail-section">
+            <h3>Role</h3>
+            <p id="detail-role"></p>
+          </div>
+          <div class="detail-section">
+            <h3>Technologies</h3>
+            <p id="detail-technologies"></p>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h3>Skills</h3>
+          <div class="skill-tags" id="detail-skills"></div>
+        </div>
+        <div class="detail-section" id="detail-links-section">
+          <h3>Links</h3>
+          <div class="detail-links" id="detail-links"></div>
+        </div>
+        <div class="detail-section" id="detail-file-section">
+          <h3>Project file</h3>
+          <a class="file-download" id="detail-file" download></a>
+        </div>
+        <div class="detail-actions">
+          <button class="delete-button" id="delete-project" type="button">
+            Delete project
+          </button>
+          <button class="save-button" id="edit-project" type="button">
+            Edit project
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="canvas-dialog" id="canvas-dialog">
+      <div class="canvas-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">Mock Canvas connection</p>
+            <h2>Import assignments</h2>
+          </div>
+          <button
+            class="close-dialog"
+            id="close-canvas-import"
+            type="button"
+            aria-label="Close Canvas import"
+          >
+            ×
+          </button>
+        </div>
+        <p class="canvas-intro">
+          Choose completed assignments to add as projects. This demo uses mock
+          Canvas data and never imports grades.
+        </p>
+        <div class="canvas-list" id="canvas-list"></div>
+        <label class="agreement-check canvas-consent">
+          <input id="canvas-consent" type="checkbox" />
+          <span>
+            I consent to importing the selected assignment details. I
+            understand that grades are not imported.
+          </span>
+        </label>
+        <p class="form-message" id="canvas-message" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="cancel-button" id="cancel-canvas-import" type="button">
+            Cancel
+          </button>
+          <button class="save-button" id="import-canvas-projects" type="button" disabled>
+            Import selected
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="/project-library.js"></script>
+  </body>
+</html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ResumeGPT helps UNC Charlotte students build focused, professional resumes."
+    />
+    <title>ResumeGPT — Home</title>
+    <link rel="stylesheet" href="/homepage.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/homepage.html">
+        <span class="brand-mark">R</span>
+        <span>ResumeGPT</span>
+      </a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a class="active" href="/homepage.html">Profile</a>
+        <a href="/resume.html">Resume</a>
+        <a href="/project-library.html">Projects</a>
+      </nav>
+      <div class="header-actions">
+        <a class="canvas-test-link" href="/canvas-assignment.html">
+          Test-Canvas-Extension
+        </a>
+        <a class="logout" href="/">Log out</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Student workspace</p>
+          <h1>Welcome back,<br /><span class="js-username">John Bob</span>.</h1>
+          <p class="hero-copy">
+            Keep your experience current and your next application ready.
+          </p>
+        </div>
+      </section>
+
+      <div class="dashboard-grid">
+        <div class="activity-column">
+          <section class="panel">
+            <p class="section-label">Resume library</p>
+            <div class="panel-heading">
+              <h2>Recent resumes</h2>
+              <a href="/resume.html">View all</a>
+            </div>
+            <div class="item-list">
+              <a class="activity-item" href="/resume.html">
+                <span class="file-mark">01</span>
+                <span class="item-copy">
+                  <strong>Software Engineer Resume v2</strong>
+                  <small>Created October 4, 2026</small>
+                </span>
+                <span class="item-action">Open</span>
+              </a>
+              <a class="activity-item" href="/resume.html">
+                <span class="file-mark">02</span>
+                <span class="item-copy">
+                  <strong>Full-Stack Developer Resume</strong>
+                  <small>Created September 28, 2026</small>
+                </span>
+                <span class="item-action">Open</span>
+              </a>
+              <a class="activity-item" href="/resume.html">
+                <span class="file-mark">03</span>
+                <span class="item-copy">
+                  <strong>Data Structures &amp; Algorithms Resume</strong>
+                  <small>Created September 15, 2026</small>
+                </span>
+                <span class="item-action">Open</span>
+              </a>
+            </div>
+          </section>
+
+          <section class="panel">
+            <p class="section-label">Synced coursework</p>
+            <div class="panel-heading">
+              <h2>Recent projects</h2>
+              <a href="/project-library.html">View all</a>
+            </div>
+            <div class="item-list">
+              <a class="activity-item" href="/project-library.html">
+                <span class="project-mark">IT</span>
+                <span class="item-copy">
+                  <strong>ITSC-3155 Web Application Project</strong>
+                  <small>Canvas sync · October 2, 2026</small>
+                </span>
+                <span class="status">Verified</span>
+              </a>
+              <a class="activity-item" href="/project-library.html">
+                <span class="project-mark">DB</span>
+                <span class="item-copy">
+                  <strong>Database Management System</strong>
+                  <small>Canvas sync · September 20, 2026</small>
+                </span>
+                <span class="status">Verified</span>
+              </a>
+              <a class="activity-item" href="/project-library.html">
+                <span class="project-mark">OS</span>
+                <span class="item-copy">
+                  <strong>Operating Systems Simulator</strong>
+                  <small>Canvas sync · September 10, 2026</small>
+                </span>
+                <span class="status">Verified</span>
+              </a>
+            </div>
+          </section>
+        </div>
+
+        <aside class="profile-card">
+          <div class="profile-avatar" aria-label="Default profile picture">
+            <span class="profile-avatar-head"></span>
+            <span class="profile-avatar-body"></span>
+          </div>
+          <p class="section-label gold">Your profile</p>
+          <h2 class="js-username">John Bob</h2>
+          <dl>
+            <div>
+              <dt>School</dt>
+              <dd>UNC Charlotte</dd>
+            </div>
+            <div>
+              <dt>Major</dt>
+              <dd>Computer Science</dd>
+            </div>
+            <div>
+              <dt>Graduation</dt>
+              <dd>Spring 2027</dd>
+            </div>
+          </dl>
+          <p class="profile-note">
+            ResumeGPT syncs coursework to turn class projects into clear,
+            verified resume bullet points.
+          </p>
+          <a class="profile-button" href="/resume.html">Build a resume</a>
+        </aside>
+      </div>
+    </main>
+
+    <footer>
+      <span>ResumeGPT</span>
+      <span>Built for UNC Charlotte students</span>
+    </footer>
+    <script>
+      const username = window.localStorage.getItem("resumegptUsername");
+
+      if (username) {
+        document.querySelectorAll(".js-username").forEach((element) => {
+          element.textContent = username;
+        });
+      }
+    </script>
+  </body>
+</html>

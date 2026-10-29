@@ -1,0 +1,94 @@
+/* Frame matches the screenshot: 2158 x 1216 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 2158px;
+  height: 1216px;
+  background: #3d5247;
+  border: 3px solid #7c4dff;
+  font-family: "Outfit", "Poppins", "Helvetica Neue", Arial, sans-serif;
+  color: #f9e09b;
+  position: relative;
+}
+
+/* Card: x 622 → 1409, y 175 → 1043 */
+.card {
+  position: absolute;
+  left: 622px;
+  top: 175px;
+  width: 787px;
+  height: 868px;
+  background: #0f291c;
+  border-radius: 28px;
+}
+
+h1 {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 68px;
+  font-weight: 400;
+  line-height: 1.1;
+  color: #f9e09b;
+}
+
+label {
+  position: absolute;
+  left: 55px;
+  font-size: 36px;
+  font-weight: 400;
+  color: #f9e09b;
+}
+.label-user { top: 175px; }
+.label-pass { top: 351px; }
+
+.input {
+  position: absolute;
+  left: 55px;
+  width: 677px;
+  height: 67px;
+  background: #0f291c;
+  border: 2px solid #8d8453;
+  border-radius: 16px;
+}
+.input-user { top: 230px; }
+.input-pass { top: 406px; }
+
+.create {
+  position: absolute;
+  top: 618px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 26px;
+  color: #f9e09b;
+}
+
+.login {
+  position: absolute;
+  left: 55px;
+  top: 667px;
+  width: 677px;
+  height: 81px;
+  background: #f9e09b;
+  color: #000;
+  border: none;
+  border-radius: 41px;
+  font-family: inherit;
+  font-size: 40px;
+  cursor: pointer;
+}
+
+.disclaimer {
+  position: absolute;
+  top: 758px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 21px;
+  line-height: 28px;
+  color: #cdc58a;
+}
+.disclaimer a { color: inherit; text-decoration: underline; }
