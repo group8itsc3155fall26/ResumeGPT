@@ -1,2 +1,2 @@
 # ResumeGPT
-resume generation project based on figma and ai integration
+resume generation project based on figma and ai integration.
