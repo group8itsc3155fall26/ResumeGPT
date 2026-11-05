@@ -254,7 +254,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${section === "Profile" ? "" : "secondary-page"}`}>
       <header className="topbar">
         <button className="brand" onClick={() => setSection("Profile")} aria-label="ResumeGPT home">
           <span className="brand-mark">R</span>
