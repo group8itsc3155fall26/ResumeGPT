@@ -1,0 +1,58 @@
+@startuml
+' ResumeGPT — user story: "user creates a project and it persists"
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+autonumber
+
+title Create project and persist it
+
+actor User as U
+participant "React UI\n(Projects view + modal)" as UI
+participant "API server\n(POST /api/projects)" as API
+participant "Prisma\ndata-access" as ORM
+database "SQLite\n(dev.db)" as SQL
+
+U -> UI : open "Add project" modal
+U -> UI : fill title, description,\ncourse, skills; submit
+activate UI
+
+UI -> UI : validate title & description non-empty
+
+alt validation fails
+  UI --> U : inline error\n"Add a project title and description to continue."
+  note right of UI : no HTTP request is sent;\nentered values stay in the form
+else input is valid
+  UI -> API : POST /api/projects\n{title, course, semester, description,\nskills, source}
+  activate API
+
+  API -> API : validate payload, parse\nskills CSV into array
+
+  alt payload rejected (400)
+    API --> UI : 400 {error}
+    UI --> U : show error, keep form open
+  else payload accepted
+    API -> ORM : project.create({ data: { ..., userId } })
+    activate ORM
+    ORM -> SQL : INSERT INTO Project
+    activate SQL
+    SQL --> ORM : new row (id, createdAt)
+    deactivate SQL
+    ORM --> API : Project record
+    deactivate ORM
+    API --> UI : 201 { project }
+    UI -> UI : prepend project to list
+    UI --> U : close modal, show\n"Project added to your library."
+  end
+
+  deactivate API
+end
+
+deactivate UI
+
+note over API, SQL
+  Target architecture. The current build still
+  writes to localStorage; the API + Prisma layers
+  land with issue #8.
+end note
+
+@enduml

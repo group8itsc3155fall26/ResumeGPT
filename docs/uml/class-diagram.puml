@@ -1,0 +1,55 @@
+@startuml
+' ResumeGPT data model — mirrors prisma/schema.prisma
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide circle
+hide empty members
+
+title ResumeGPT — Data Model
+
+class User {
+  +id : String <<PK>>
+  +username : String <<unique>>
+  +createdAt : DateTime
+}
+
+class Project {
+  +id : String <<PK>>
+  +title : String
+  +course : String
+  +semester : String
+  +description : String
+  +skills : String
+  +source : Source
+  +userId : String <<FK>>
+}
+
+class Resume {
+  +id : String <<PK>>
+  +title : String
+  +date : String
+  +userId : String <<FK>>
+}
+
+enum Source <<enumeration>> {
+  Canvas
+  Personal
+}
+
+User "1" ||--o{ "0..*" Project : owns
+User "1" ||--o{ "0..*" Resume : owns
+Project "0..*" }o--|| "1" Source : classified as
+
+note right of Project::skills
+  JSON-encoded string, e.g. ["React","SQL"].
+  Prisma SQLite has no scalar lists; parsed to
+  string[] at the API boundary. See
+  docs/ai-design-review.md.
+end note
+
+note bottom of User
+  Only id is fixed by the current schema task;
+  username/createdAt land with server-side auth.
+end note
+
+@enduml
