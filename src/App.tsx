@@ -27,6 +27,30 @@ type Resume = {
 type NewProject = Omit<Project, "id">;
 
 type Section = "Profile" | "Resume" | "Projects" | "Canvas";
+
+/** Collected when a student creates an account; not collected on plain login. */
+type StudentProfile = { fullName: string; major: string; graduationYear: string };
+
+const PROFILE_KEY = "resumegptProfile";
+
+function loadProfile(): StudentProfile | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PROFILE_KEY) ?? "null") as Partial<StudentProfile> | null;
+    return value?.fullName && value.major && value.graduationYear
+      ? { fullName: value.fullName, major: value.major, graduationYear: value.graduationYear }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** "John Bob" -> "JB" (first and last word). */
+const initialsOf = (name: string) => {
+  const words = name.trim().split(/\s+/);
+  return [words[0], words.length > 1 ? words[words.length - 1] : ""]
+    .map((word) => word.charAt(0).toUpperCase())
+    .join("");
+};
 type AuthMode = "login" | "create";
 
 const PROJECTS_API = "/api/projects";
@@ -122,6 +146,7 @@ function App() {
   const [username, setUsername] = useState(
     () => window.localStorage.getItem("resumegptUsername") || "",
   );
+  const [profile, setProfile] = useState<StudentProfile | null>(loadProfile);
   const [authMode, setAuthMode] = useState<AuthMode | null>(() =>
     window.localStorage.getItem("resumegptUsername") ? null : "login",
   );
@@ -312,7 +337,9 @@ function App() {
 
   const logout = () => {
     window.localStorage.removeItem("resumegptUsername");
+    window.localStorage.removeItem(PROFILE_KEY);
     setUsername("");
+    setProfile(null);
     setNotice("You have been logged out of this demo.");
     setAuthMode("login");
   };
@@ -322,9 +349,13 @@ function App() {
       <AuthPage
         mode={authMode}
         onChangeMode={setAuthMode}
-        onAuthenticated={(name) => {
+        onAuthenticated={(name, newProfile) => {
           window.localStorage.setItem("resumegptUsername", name);
+          // Plain login has no profile details, so the profile cards stay empty.
+          if (newProfile) window.localStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
+          else window.localStorage.removeItem(PROFILE_KEY);
           setUsername(name);
+          setProfile(newProfile);
           setAuthMode(null);
           setSection("Profile");
         }}
@@ -382,6 +413,7 @@ function App() {
         {section === "Profile" && (
           <ProfilePage
             username={username || "there"}
+            profile={profile}
             resumes={resumes}
             projects={projects}
             onNavigate={setSection}
@@ -396,6 +428,7 @@ function App() {
 
         {section === "Resume" && (
           <ResumePage
+            profile={profile}
             skillOptions={skillOptions}
             selectedSkills={selectedSkills}
             generating={generating}
@@ -600,9 +633,12 @@ function AuthPage({
 }: {
   mode: AuthMode;
   onChangeMode: (mode: AuthMode) => void;
-  onAuthenticated: (username: string) => void;
+  onAuthenticated: (username: string, profile: StudentProfile | null) => void;
 }) {
   const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [major, setMajor] = useState("");
+  const [graduationYear, setGraduationYear] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -634,7 +670,21 @@ function AuthPage({
       setError("Your passwords do not match.");
       return;
     }
-    onAuthenticated(name);
+    if (!isCreate) {
+      onAuthenticated(name, null);
+      return;
+    }
+    const year = graduationYear.trim();
+    if (!fullName.trim() || !major.trim()) {
+      setError("Enter your full name and major.");
+      return;
+    }
+    const thisYear = new Date().getFullYear();
+    if (!/^\d{4}$/.test(year) || Number(year) < thisYear - 10 || Number(year) > thisYear + 10) {
+      setError("Enter your graduation year as four digits, for example 2027.");
+      return;
+    }
+    onAuthenticated(name, { fullName: fullName.trim(), major: major.trim(), graduationYear: year });
   };
 
   return (
@@ -662,6 +712,34 @@ function AuthPage({
               : "Continue where you left off."}
           </p>
           <form className="auth-form" onSubmit={submit} noValidate>
+            {isCreate && (
+              <>
+                <label htmlFor="auth-full-name">Full name</label>
+                <input
+                  autoComplete="name"
+                  id="auth-full-name"
+                  onChange={(event) => setFullName(event.target.value)}
+                  placeholder="Enter your full name"
+                  value={fullName}
+                />
+                <label htmlFor="auth-major">Major</label>
+                <input
+                  id="auth-major"
+                  onChange={(event) => setMajor(event.target.value)}
+                  placeholder="e.g. Computer Science"
+                  value={major}
+                />
+                <label htmlFor="auth-graduation-year">Graduation year</label>
+                <input
+                  id="auth-graduation-year"
+                  inputMode="numeric"
+                  maxLength={4}
+                  onChange={(event) => setGraduationYear(event.target.value.replace(/\D/g, ""))}
+                  placeholder="e.g. 2027"
+                  value={graduationYear}
+                />
+              </>
+            )}
             <label htmlFor="auth-username">Username</label>
             <input
               autoComplete="username"
@@ -775,6 +853,7 @@ function Notice({ message, onDismiss }: { message: string; onDismiss: () => void
 
 function ProfilePage({
   username,
+  profile,
   resumes,
   projects,
   onNavigate,
@@ -783,6 +862,7 @@ function ProfilePage({
   onDismissNotice,
 }: {
   username: string;
+  profile: StudentProfile | null;
   resumes: Resume[];
   projects: Project[];
   onNavigate: (section: Section) => void;
@@ -829,12 +909,13 @@ function ProfilePage({
         <aside className="profile-card">
           <div className="avatar"><span /></div>
           <Eyebrow>YOUR PROFILE</Eyebrow>
-          <h2>{username}</h2>
-          <dl>
-            <div><dt>School</dt><dd>UNC Charlotte</dd></div>
-            <div><dt>Major</dt><dd>Computer Science</dd></div>
-            <div><dt>Graduation</dt><dd>Spring 2027</dd></div>
-          </dl>
+          <h2>{profile?.fullName ?? username}</h2>
+          {profile && (
+            <dl>
+              <div><dt>Major</dt><dd>{profile.major}</dd></div>
+              <div><dt>Graduation</dt><dd>{profile.graduationYear}</dd></div>
+            </dl>
+          )}
           <p className="profile-footnote">ResumeGPT syncs coursework to turn your experience into a stronger resume.</p>
         </aside>
       </div>
@@ -843,6 +924,7 @@ function ProfilePage({
 }
 
 function ResumePage({
+  profile,
   skillOptions,
   selectedSkills,
   generating,
@@ -855,6 +937,7 @@ function ResumePage({
   notice,
   onDismissNotice,
 }: {
+  profile: StudentProfile | null;
   skillOptions: string[];
   selectedSkills: string[];
   generating: boolean;
@@ -889,7 +972,12 @@ function ResumePage({
               </button>
             ))}
           </div>
-          <div className="student-mini"><span className="mini-avatar">JB</span><span><strong>John Bob</strong><small>Computer Science · 2027</small></span></div>
+          {profile && (
+            <div className="student-mini">
+              <span className="mini-avatar">{initialsOf(profile.fullName)}</span>
+              <span><strong>{profile.fullName}</strong><small>{profile.major} · {profile.graduationYear}</small></span>
+            </div>
+          )}
         </aside>
         <section className="chat-panel">
           <header className="chat-header">
