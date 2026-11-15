@@ -40,6 +40,8 @@ model Resume {
   title     String
   // Display string ("October 4, 2026") to match Resume["date"] in src/App.tsx.
   date      String
+  // JSON-encoded ResumeContent (skills + projects sections) for AI drafts; null for older resumes.
+  content   String?
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

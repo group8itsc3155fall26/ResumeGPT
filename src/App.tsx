@@ -10,10 +10,18 @@ type Project = {
   source: "Canvas" | "Personal";
 };
 
+/** AI-drafted resume body: only a skills section and a projects section. */
+type ResumeContent = {
+  targetRole: string;
+  skills: string[];
+  projects: { projectId: number; title: string; course: string; semester: string; bullets: string[] }[];
+};
+
 type Resume = {
   id: number;
   title: string;
   date: string;
+  content: ResumeContent | null;
 };
 
 type NewProject = Omit<Project, "id">;
@@ -22,6 +30,7 @@ type Section = "Profile" | "Resume" | "Projects" | "Canvas";
 type AuthMode = "login" | "create";
 
 const PROJECTS_API = "/api/projects";
+const RESUMES_API = "/api/resumes";
 
 /** Fetch helper: the API reports validation failures as { error } with a 4xx. */
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -41,6 +50,18 @@ const postProject = (input: NewProject) =>
   });
 
 const deleteProject = (id: number) => api<null>(`${PROJECTS_API}/${id}`, { method: "DELETE" });
+
+const generateResume = (prompt: string, skills: string[]) =>
+  api<Resume>(`${RESUMES_API}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, skills }),
+    // The server gives up on Gemini after ~65s (main model + fallback); never spin past that.
+    signal: AbortSignal.timeout(75_000),
+  }).catch((error: Error) => {
+    if (error.name === "TimeoutError") throw new Error("The request timed out. Make sure `pnpm server` is running and try again.");
+    throw error;
+  });
 
 // Canvas demo fixtures: what the extension "syncs". Saved projects live in the database.
 const canvasProjects: Project[] = [
@@ -86,17 +107,8 @@ const canvasProjects: Project[] = [
   },
 ];
 
-const initialResumes: Resume[] = [
-  { id: 1, title: "Software Engineer Resume v2", date: "October 4, 2026" },
-  { id: 2, title: "Full-Stack Developer Resume", date: "September 28, 2026" },
-  {
-    id: 3,
-    title: "Data Structures & Algorithms Resume",
-    date: "September 15, 2026",
-  },
-];
-
-const skillOptions = [
+/** Shown in the skill picker until the student has projects with skills of their own. */
+const defaultSkillOptions = [
   "React",
   "TypeScript",
   "Python",
@@ -117,7 +129,9 @@ function App() {
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [projectsError, setProjectsError] = useState("");
   const [savingProject, setSavingProject] = useState(false);
-  const [resumes, setResumes] = useState<Resume[]>(initialResumes);
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [activeResumeId, setActiveResumeId] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("All courses");
   const [semesterFilter, setSemesterFilter] = useState("All semesters");
@@ -131,6 +145,15 @@ function App() {
   const [projectSkills, setProjectSkills] = useState("");
   const [projectError, setProjectError] = useState("");
   const [notice, setNotice] = useState("");
+
+  // Skills the student can pick: every skill on their projects, once each (case-insensitive).
+  const skillOptions = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const skill of projects.flatMap((project) => project.skills)) {
+      if (!byKey.has(skill.toLowerCase())) byKey.set(skill.toLowerCase(), skill);
+    }
+    return byKey.size ? [...byKey.values()] : defaultSkillOptions;
+  }, [projects]);
 
   const filteredProjects = useMemo(
     () =>
@@ -161,6 +184,11 @@ function App() {
         if (active) setProjectsError(`Could not load your projects. ${error.message}`);
       })
       .finally(() => active && setLoadingProjects(false));
+    api<Resume[]>(RESUMES_API)
+      .then((rows) => active && setResumes(rows))
+      .catch(() => {
+        /* the resume library just stays empty; project errors are already shown */
+      });
     return () => {
       active = false;
     };
@@ -174,8 +202,9 @@ function App() {
     );
   };
 
-  const handleGenerate = (event: FormEvent<HTMLFormElement>) => {
+  const handleGenerate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (generating) return;
     if (!roleDescription.trim()) {
       setNotice("Describe the role you want to target first.");
       return;
@@ -184,18 +213,18 @@ function App() {
       setNotice("Choose at least one skill to emphasize.");
       return;
     }
-    const next: Resume = {
-      id: Date.now(),
-      title: `${roleDescription.trim().split("\n")[0].slice(0, 42)} Resume`,
-      date: new Intl.DateTimeFormat("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date()),
-    };
-    setResumes((current) => [next, ...current]);
-    setNotice("Your tailored resume draft is ready in your resume library.");
-    setSection("Profile");
+    setGenerating(true);
+    setNotice("");
+    try {
+      const created = await generateResume(roleDescription.trim(), selectedSkills);
+      setResumes((current) => [created, ...current]);
+      setActiveResumeId(created.id);
+      setNotice("Your tailored resume draft is ready and saved to your resume library.");
+    } catch (error) {
+      setNotice(`Could not generate your resume. ${(error as Error).message}`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleAddProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -356,6 +385,10 @@ function App() {
             resumes={resumes}
             projects={projects}
             onNavigate={setSection}
+            onOpenResume={(id) => {
+              setActiveResumeId(id);
+              setSection("Resume");
+            }}
             notice={notice}
             onDismissNotice={() => setNotice("")}
           />
@@ -363,7 +396,14 @@ function App() {
 
         {section === "Resume" && (
           <ResumePage
+            skillOptions={skillOptions}
             selectedSkills={selectedSkills}
+            generating={generating}
+            activeResume={resumes.find((resume) => resume.id === activeResumeId) ?? null}
+            onNewDraft={() => {
+              setRoleDescription("");
+              setActiveResumeId(null);
+            }}
             onToggleSkill={toggleSkill}
             roleDescription={roleDescription}
             onRoleChange={setRoleDescription}
@@ -738,6 +778,7 @@ function ProfilePage({
   resumes,
   projects,
   onNavigate,
+  onOpenResume,
   notice,
   onDismissNotice,
 }: {
@@ -745,6 +786,7 @@ function ProfilePage({
   resumes: Resume[];
   projects: Project[];
   onNavigate: (section: Section) => void;
+  onOpenResume: (id: number) => void;
   notice: string;
   onDismissNotice: () => void;
 }) {
@@ -762,12 +804,13 @@ function ProfilePage({
             <SectionHeading eyebrow="RESUME LIBRARY" title="Recent resumes" action="View all" onAction={() => onNavigate("Resume")} />
             <div className="resume-list">
               {resumes.slice(0, 3).map((resume, index) => (
-                <button className="resume-row" key={resume.id} onClick={() => onNavigate("Resume")}>
+                <button className="resume-row" key={resume.id} onClick={() => onOpenResume(resume.id)}>
                   <span className="resume-number">{String(index + 1).padStart(2, "0")}</span>
                   <span className="resume-info"><strong>{resume.title}</strong><small>Created {resume.date}</small></span>
                   <span className="row-action">Open</span>
                 </button>
               ))}
+              {!resumes.length && <p className="muted-copy">No resumes yet. Generate one in the Resume tab.</p>}
             </div>
           </section>
           <section className="surface-card recent-card projects-preview">
@@ -800,7 +843,11 @@ function ProfilePage({
 }
 
 function ResumePage({
+  skillOptions,
   selectedSkills,
+  generating,
+  activeResume,
+  onNewDraft,
   onToggleSkill,
   roleDescription,
   onRoleChange,
@@ -808,7 +855,11 @@ function ResumePage({
   notice,
   onDismissNotice,
 }: {
+  skillOptions: string[];
   selectedSkills: string[];
+  generating: boolean;
+  activeResume: Resume | null;
+  onNewDraft: () => void;
   onToggleSkill: (skill: string) => void;
   roleDescription: string;
   onRoleChange: (value: string) => void;
@@ -842,8 +893,8 @@ function ResumePage({
         </aside>
         <section className="chat-panel">
           <header className="chat-header">
-            <div className="assistant-id"><span className="brand-mark">R</span><span><strong>ResumeGPT</strong><small><i className="status-dot" /> Ready to help</small></span></div>
-            <button className="secondary-button compact" onClick={() => onRoleChange("")}>New draft</button>
+            <div className="assistant-id"><span className="brand-mark">R</span><span><strong>ResumeGPT</strong><small><i className="status-dot" /> {generating ? "Drafting your resume..." : "Ready to help"}</small></span></div>
+            <button className="secondary-button compact" onClick={onNewDraft}>New draft</button>
           </header>
           <div className="conversation">
             <div className="assistant-message">
@@ -856,14 +907,73 @@ function ResumePage({
                 </div>
               </div>
             </div>
+            {generating && (
+              <div className="assistant-message" aria-live="polite">
+                <span className="brand-mark small">R</span>
+                <div><strong>ResumeGPT</strong><p>Reading your projects that use {selectedSkills.join(", ")} and drafting bullets...</p></div>
+              </div>
+            )}
+            {!generating && activeResume && (
+              activeResume.content ? (
+                <ResumeDraft resume={activeResume} content={activeResume.content} />
+              ) : (
+                <div className="assistant-message">
+                  <span className="brand-mark small">R</span>
+                  <div><strong>ResumeGPT</strong><p>"{activeResume.title}" was created before AI drafting, so there is no draft to show. Generate a new one below.</p></div>
+                </div>
+              )
+            )}
           </div>
           <form className="composer" onSubmit={onSubmit}>
             <textarea aria-label="Describe your target role" onChange={(event) => onRoleChange(event.target.value)} placeholder="Describe the role you want to target..." rows={3} value={roleDescription} />
-            <div className="composer-footer"><span>{selectedSkills.length} skills selected</span><button className="primary-button" type="submit">Generate resume <span aria-hidden="true">→</span></button></div>
+            <div className="composer-footer"><span>{selectedSkills.length} skills selected</span><button className="primary-button" disabled={generating} type="submit">{generating ? "Generating..." : <>Generate resume <span aria-hidden="true">→</span></>}</button></div>
           </form>
         </section>
       </div>
     </>
+  );
+}
+
+function ResumeDraft({ resume, content }: { resume: Resume; content: ResumeContent }) {
+  const [copied, setCopied] = useState(false);
+  const plainText = [
+    "SKILLS",
+    content.skills.join(" · "),
+    "",
+    "PROJECTS",
+    ...content.projects.flatMap((project) => [
+      `${project.title} | ${project.course} | ${project.semester}`,
+      ...project.bullets.map((bullet) => `• ${bullet}`),
+      "",
+    ]),
+  ].join("\n");
+  const copy = () => {
+    navigator.clipboard
+      .writeText(plainText)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
+  return (
+    <article className="resume-draft" aria-label={resume.title}>
+      <header className="resume-draft-header">
+        <div><h2>{resume.title}</h2><small>For: {content.targetRole} · {resume.date}</small></div>
+        <button className="secondary-button compact" onClick={copy} type="button">{copied ? "Copied" : "Copy text"}</button>
+      </header>
+      <section>
+        <h3>Skills</h3>
+        <div className="tag-list">{content.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
+      </section>
+      <section>
+        <h3>Projects</h3>
+        {content.projects.map((project) => (
+          <div className="resume-draft-project" key={project.projectId}>
+            <div className="resume-draft-project-heading"><strong>{project.title}</strong><small>{project.course} · {project.semester}</small></div>
+            <ul>{project.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>
+          </div>
+        ))}
+      </section>
+    </article>
   );
 }
 

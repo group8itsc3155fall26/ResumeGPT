@@ -18,10 +18,24 @@ export type Project = {
   source: ProjectSource;
 };
 
+/** An AI-drafted resume: only a skills section and a projects section. */
+export type ResumeContent = {
+  targetRole: string;
+  skills: string[];
+  projects: {
+    projectId: number;
+    title: string;
+    course: string;
+    semester: string;
+    bullets: string[];
+  }[];
+};
+
 export type Resume = {
   id: number;
   title: string;
   date: string;
+  content: ResumeContent | null;
 };
 
 type ProjectRow = Omit<Project, "skills" | "source"> & { skills: string; source: string };

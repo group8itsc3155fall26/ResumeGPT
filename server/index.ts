@@ -1,7 +1,13 @@
 import express, { type NextFunction, type Request, type Response } from "express";
+import { existsSync } from "node:fs";
 import { ValidationError } from "../src/server/db";
 import { createProject, deleteProject, listProjects } from "../src/server/projects";
-import { createResume, deleteResume, listResumes } from "../src/server/resumes";
+import { AiError } from "../src/server/resumeDraft";
+import { createResume, deleteResume, generateResume, listResumes } from "../src/server/resumes";
+
+// Load secrets (GEMINI_API_KEY) and settings from the git-ignored .env file.
+// Read at request time, so this runs before any key is needed.
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 const app = express();
 app.use(express.json());
@@ -36,6 +42,12 @@ app.post("/api/resumes", async (req, res) => {
   res.status(201).json(await createResume({ ...req.body, userId: DEMO_USER_ID }));
 });
 
+app.post("/api/resumes/generate", async (req, res) => {
+  res.status(201).json(
+    await generateResume({ userId: DEMO_USER_ID, prompt: req.body?.prompt, skills: req.body?.skills }),
+  );
+});
+
 app.delete("/api/resumes/:id", async (req, res) => {
   const deleted = await deleteResume(DEMO_USER_ID, idFrom(req.params.id));
   res.status(deleted ? 204 : 404).end();
@@ -45,6 +57,10 @@ app.delete("/api/resumes/:id", async (req, res) => {
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof ValidationError) {
     res.status(400).json({ error: error.message });
+    return;
+  }
+  if (error instanceof AiError) {
+    res.status(error.status).json({ error: error.message });
     return;
   }
   console.error(error);
