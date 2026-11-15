@@ -531,6 +531,24 @@ function App() {
   );
 }
 
+/** Count of distinct skills across projects, ignoring case ("Python" and "PYTHON" count once). */
+const countSkills = (projects: Project[]) =>
+  new Set(projects.flatMap((project) => project.skills.map((skill) => skill.toLowerCase()))).size;
+
+/** Large serif numbers with gold dividers; fills the right side of the page heroes. */
+function HeroStats({ stats }: { stats: { label: string; value: number }[] }) {
+  return (
+    <dl className="hero-stats">
+      {stats.map((stat) => (
+        <div key={stat.label}>
+          <dt>{stat.label}</dt>
+          <dd>{stat.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return <p className="eyebrow">{children}</p>;
 }
@@ -873,9 +891,18 @@ function ProfilePage({
   return (
     <>
       <div className="profile-hero">
-        <Eyebrow>STUDENT WORKSPACE</Eyebrow>
-        <h1>Welcome back,<br />{username}.</h1>
-        <p>Keep your experience current and your next application ready.</p>
+        <div>
+          <Eyebrow>STUDENT WORKSPACE</Eyebrow>
+          <h1>Welcome back,<br />{username}.</h1>
+          <p>Keep your experience current and your next application ready.</p>
+        </div>
+        <HeroStats
+          stats={[
+            { label: "Resumes", value: resumes.length },
+            { label: "Projects", value: projects.length },
+            { label: "Skills", value: countSkills(projects) },
+          ]}
+        />
       </div>
       <Notice message={notice} onDismiss={onDismissNotice} />
       <div className="dashboard-grid">
@@ -1112,7 +1139,16 @@ function ProjectsPage({
     <>
       <div className="projects-hero">
         <div><Eyebrow>EXPERIENCE LIBRARY</Eyebrow><h1>Your work,<br />ready to use.</h1><p>Keep coursework and personal projects organized so ResumeGPT<br className="desktop-break" /> can turn your experience into stronger resume bullets.</p></div>
-        <div className="hero-actions"><button className="secondary-button" onClick={onImport}>Import from Canvas</button><button className="primary-button" onClick={onAdd}><span aria-hidden="true">＋</span> Add project</button></div>
+        <div className="hero-side">
+          <HeroStats
+            stats={[
+              { label: "Projects", value: allProjects.length },
+              { label: "Courses", value: courses.length },
+              { label: "Skills", value: skills.length },
+            ]}
+          />
+          <div className="hero-actions"><button className="secondary-button" onClick={onImport}>Import from Canvas</button><button className="primary-button" onClick={onAdd}><span aria-hidden="true">＋</span> Add project</button></div>
+        </div>
       </div>
       <Notice message={notice} onDismiss={onDismissNotice} />
       <section className="surface-card library-card">

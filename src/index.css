@@ -112,7 +112,7 @@
   font-weight: 750;
 }
 .logout-button:hover, .text-action:hover { text-decoration: underline; text-underline-offset: 3px; }
-.page-content { width: min(100% - 58px, 1304px); margin: 0 auto; padding: 64px 0 72px; }
+.page-content { width: min(100% - 58px, 1304px); margin: 0 auto; padding: 36px 0 72px; }
 .eyebrow {
   margin: 0 0 13px;
   color: #006044;
@@ -122,7 +122,7 @@
   line-height: 1.4;
 }
 h1, h2, h3, p { margin-top: 0; }
-.profile-hero { margin: 3px 0 47px; }
+.profile-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 25px; margin: 3px 0 40px; }
 .profile-hero h1, .projects-hero h1, .resume-hero h1 {
   margin: 0;
   color: #0a3d30;
@@ -132,7 +132,7 @@ h1, h2, h3, p { margin-top: 0; }
   line-height: .96;
 }
 .profile-hero h1 { font-size: clamp(48px, 6vw, 69px); }
-.profile-hero > p, .projects-hero > div > p {
+.profile-hero > div > p, .projects-hero > div > p {
   margin: 20px 0 0;
   color: #6b7973;
   font-size: 13px;
@@ -234,6 +234,15 @@ h1, h2, h3, p { margin-top: 0; }
 .projects-hero h1 { font-size: clamp(50px, 6vw, 67px); }
 .projects-hero > div > p { margin-top: 22px; }
 .hero-actions { display: flex; flex: 0 0 auto; gap: 9px; padding-bottom: 4px; }
+.hero-side { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 26px; }
+
+/* Stat row that fills the right side of the Profile and Projects heroes. */
+.hero-stats { display: flex; flex: 0 0 auto; margin: 0; padding-bottom: 6px; }
+.hero-stats > div { display: flex; flex-direction: column-reverse; gap: 6px; min-width: 92px; padding: 0 24px; border-left: 1px solid rgb(164 150 101 / 45%); }
+.hero-stats > div:first-child { padding-left: 0; border-left: 0; }
+.hero-stats > div:last-child { padding-right: 0; }
+.hero-stats dd { margin: 0; color: #0a3d30; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 3.4vw, 46px); font-weight: 700; letter-spacing: -.05em; line-height: 1; }
+.hero-stats dt { color: #a49665; font-size: 9px; font-weight: 850; letter-spacing: .22em; text-transform: uppercase; }
 .primary-button, .secondary-button {
   display: inline-flex;
   min-height: 38px;
@@ -474,7 +483,7 @@ h1, h2, h3, p { margin-top: 0; }
 .extension-saved button { display: block; border: 0; padding: 1px 0 0; background: transparent; color: #15583f; font-size: 8px; font-weight: 850; text-decoration: underline; }
 
 @media (min-width: 1400px) {
-  .page-content { width: min(100% - 103px, 1426px); padding-top: 70px; }
+  .page-content { width: min(100% - 103px, 1426px); padding-top: 40px; }
   .dashboard-grid { grid-template-columns: minmax(0, 1fr) 336px; gap: 26px; }
   .project-card { min-height: 258px; }
 }
@@ -497,8 +506,10 @@ h1, h2, h3, p { margin-top: 0; }
   .nav-item { min-width: 78px; }
   .top-actions { grid-column: 2; grid-row: 1; gap: 9px; }
   .extension-badge { padding: 6px 7px; font-size: 8px; }
-  .page-content { width: min(100% - 36px, 560px); padding: 43px 0 50px; }
-  .profile-hero { margin-bottom: 29px; }
+  .page-content { width: min(100% - 36px, 560px); padding: 28px 0 50px; }
+  .profile-hero { display: block; margin-bottom: 29px; }
+  .hero-stats { margin-top: 24px; }
+  .hero-side { align-items: flex-start; gap: 0; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .profile-card { display: grid; grid-template-columns: 68px 1fr; column-gap: 19px; min-height: 0; padding: 24px; }
   .avatar { grid-row: span 2; width: 62px; height: 62px; margin: 0; }
@@ -523,9 +534,10 @@ h1, h2, h3, p { margin-top: 0; }
   .brand { gap: 7px; font-size: 12px; }
   .brand-mark { width: 29px; height: 29px; }
   .logout-button { font-size: 10px; }
-  .page-content { width: calc(100% - 30px); padding-top: 34px; }
+  .page-content { width: calc(100% - 30px); padding-top: 22px; }
+  .hero-stats > div { min-width: 0; padding: 0 16px; }
   .profile-hero h1, .projects-hero h1 { font-size: 49px; }
-  .profile-hero > p, .projects-hero > div > p { font-size: 12px; }
+  .profile-hero > div > p, .projects-hero > div > p { font-size: 12px; }
   .recent-card, .library-card { padding-right: 19px; padding-left: 19px; }
   .section-heading h2 { font-size: 29px; }
   .project-grid { grid-template-columns: 1fr; }
