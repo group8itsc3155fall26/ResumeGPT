@@ -142,7 +142,8 @@ function App() {
           (courseFilter === "All courses" || project.course === courseFilter) &&
           (semesterFilter === "All semesters" ||
             project.semester === semesterFilter) &&
-          (skillFilter === "All skills" || project.skills.includes(skillFilter))
+          (skillFilter === "All skills" ||
+            project.skills.some((skill) => skill.toLowerCase() === skillFilter.toLowerCase()))
         );
       }),
     [projects, query, courseFilter, semesterFilter, skillFilter],
@@ -903,7 +904,12 @@ function ProjectsPage({
 }) {
   const courses = [...new Set(allProjects.map((project) => project.course))];
   const semesters = [...new Set(allProjects.map((project) => project.semester))];
-  const skills = [...new Set(allProjects.flatMap((project) => project.skills))];
+  // One dropdown entry per skill, ignoring case (first spelling seen wins).
+  const skillsByKey = new Map<string, string>();
+  for (const skill of allProjects.flatMap((project) => project.skills)) {
+    if (!skillsByKey.has(skill.toLowerCase())) skillsByKey.set(skill.toLowerCase(), skill);
+  }
+  const skills = [...skillsByKey.values()];
   return (
     <>
       <div className="projects-hero">

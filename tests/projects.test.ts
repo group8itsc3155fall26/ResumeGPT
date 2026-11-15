@@ -52,3 +52,16 @@ it("rejects a project with an empty title", async () => {
 
   expect(await listProjects(userId)).toHaveLength(before.length);
 });
+
+it("treats skills with different capitalization as the same skill", async () => {
+  const base = {
+    userId,
+    course: "ITSC 3155",
+    semester: "Fall 2026",
+    description: "Case-insensitive skills.",
+  };
+  await createProject({ ...base, title: "First", skills: ["Python"] });
+  const second = await createProject({ ...base, title: "Second", skills: ["PYTHON", "python", "Flask"] });
+
+  expect(second.skills).toEqual(["Python", "Flask"]);
+});
