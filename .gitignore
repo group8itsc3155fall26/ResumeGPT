@@ -3,6 +3,11 @@ dist/
 build/
 .cache/
 .env*
+# Keep the placeholder file in version control; real .env values stay local.
+!.env.example
+*.db
+*.db-journal
+*.sqlite*
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo

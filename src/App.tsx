@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Project = {
   id: number;
@@ -16,10 +16,34 @@ type Resume = {
   date: string;
 };
 
+type NewProject = Omit<Project, "id">;
+
 type Section = "Profile" | "Resume" | "Projects" | "Canvas";
 type AuthMode = "login" | "create";
 
-const initialProjects: Project[] = [
+const PROJECTS_API = "/api/projects";
+
+/** Fetch helper: the API reports validation failures as { error } with a 4xx. */
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Request failed (${response.status}).`);
+  }
+  return (response.status === 204 ? null : await response.json()) as T;
+}
+
+const postProject = (input: NewProject) =>
+  api<Project>(PROJECTS_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+const deleteProject = (id: number) => api<null>(`${PROJECTS_API}/${id}`, { method: "DELETE" });
+
+// Canvas demo fixtures: what the extension "syncs". Saved projects live in the database.
+const canvasProjects: Project[] = [
   {
     id: 1,
     title: "Programming Assignment 4: REST API Client",
@@ -89,15 +113,10 @@ function App() {
   const [authMode, setAuthMode] = useState<AuthMode | null>(() =>
     window.localStorage.getItem("resumegptUsername") ? null : "login",
   );
-  const [projects, setProjects] = useState<Project[]>(() => {
-    try {
-      const saved = window.localStorage.getItem("resumegptProjects");
-      return saved ? (JSON.parse(saved) as Project[]) : initialProjects;
-    } catch (error) {
-      console.error("Could not load saved projects.", error);
-      return initialProjects;
-    }
-  });
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectsError, setProjectsError] = useState("");
+  const [savingProject, setSavingProject] = useState(false);
   const [resumes, setResumes] = useState<Resume[]>(initialResumes);
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("All courses");
@@ -129,10 +148,22 @@ function App() {
     [projects, query, courseFilter, semesterFilter, skillFilter],
   );
 
-  const persistProjects = (next: Project[]) => {
-    setProjects(next);
-    window.localStorage.setItem("resumegptProjects", JSON.stringify(next));
-  };
+  useEffect(() => {
+    let active = true;
+    api<Project[]>(PROJECTS_API)
+      .then((rows) => {
+        if (!active) return;
+        setProjects(rows);
+        setProjectsError("");
+      })
+      .catch((error: Error) => {
+        if (active) setProjectsError(`Could not load your projects. ${error.message}`);
+      })
+      .finally(() => active && setLoadingProjects(false));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((current) =>
@@ -166,15 +197,16 @@ function App() {
     setSection("Profile");
   };
 
-  const handleAddProject = (event: FormEvent<HTMLFormElement>) => {
+  const handleAddProject = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!projectTitle.trim() || !projectDescription.trim()) {
       setProjectError("Add a project title and description to continue.");
       return;
     }
-    const next = [
-      {
-        id: Date.now(),
+    setSavingProject(true);
+    setProjectError("");
+    try {
+      const created = await postProject({
         title: projectTitle.trim(),
         course: projectCourse.trim() || "Personal",
         semester: "Fall 2026",
@@ -183,33 +215,69 @@ function App() {
           .split(",")
           .map((skill) => skill.trim())
           .filter(Boolean),
-        source: "Personal" as const,
-      },
-      ...projects,
-    ];
-    persistProjects(next);
-    setProjectTitle("");
-    setProjectDescription("");
-    setProjectCourse("");
-    setProjectSkills("");
-    setProjectError("");
-    setModal(null);
-    setNotice("Project added to your library.");
+        source: "Personal",
+      });
+      setProjects((current) => [created, ...current]);
+      setProjectsError("");
+      setProjectTitle("");
+      setProjectDescription("");
+      setProjectCourse("");
+      setProjectSkills("");
+      setModal(null);
+      setNotice("Project added to your library.");
+    } catch (error) {
+      setProjectError(`Could not save your project. ${(error as Error).message}`);
+    } finally {
+      setSavingProject(false);
+    }
   };
 
-  const handleImport = () => {
+  const handleDeleteProject = async (id: number) => {
+    try {
+      await deleteProject(id);
+      setProjects((current) => current.filter((project) => project.id !== id));
+      setProjectsError("");
+      setNotice("Project removed from your library.");
+    } catch (error) {
+      setProjectsError(`Could not delete that project. ${(error as Error).message}`);
+    }
+  };
+
+  const handleImport = async () => {
     const existing = new Set(projects.map((project) => project.title));
-    const imported = initialProjects.filter(
+    const pending = canvasProjects.filter(
       (project) => project.source === "Canvas" && !existing.has(project.title),
     );
-    if (!imported.length) {
+    if (!pending.length) {
       setNotice("Your Canvas coursework is already up to date.");
       setModal(null);
       return;
     }
-    persistProjects([...imported, ...projects]);
-    setModal(null);
-    setNotice(`${imported.length} Canvas project${imported.length > 1 ? "s" : ""} imported.`);
+    try {
+      const imported: Project[] = [];
+      for (const project of pending) imported.push(await postProject(project));
+      setProjects((current) => [...imported, ...current]);
+      setModal(null);
+      setNotice(`${imported.length} Canvas project${imported.length > 1 ? "s" : ""} imported.`);
+    } catch (error) {
+      setProjectsError(`Could not import Canvas projects. ${(error as Error).message}`);
+    }
+  };
+
+  const toggleCanvasFlag = async () => {
+    const canvasProject = canvasProjects[0];
+    const saved = projects.find((project) => project.title === canvasProject.title);
+    try {
+      if (saved) {
+        await deleteProject(saved.id);
+        setProjects((current) => current.filter((project) => project.id !== saved.id));
+      } else {
+        const created = await postProject(canvasProject);
+        setProjects((current) => [created, ...current]);
+      }
+    } catch (error) {
+      setProjectsError(`Could not update your Canvas projects. ${(error as Error).message}`);
+    }
   };
 
   const logout = () => {
@@ -235,18 +303,12 @@ function App() {
   }
 
   if (section === "Canvas") {
-    const canvasProject = initialProjects[0];
+    const canvasProject = canvasProjects[0];
     const isFlagged = projects.some((project) => project.title === canvasProject.title);
     return (
       <CanvasPage
         flagged={isFlagged}
-        onToggleFlag={() => {
-          if (isFlagged) {
-            persistProjects(projects.filter((project) => project.title !== canvasProject.title));
-          } else {
-            persistProjects([canvasProject, ...projects]);
-          }
-        }}
+        onToggleFlag={() => void toggleCanvasFlag()}
         onViewProjects={() => setSection("Projects")}
         onReturn={() => setSection("Profile")}
       />
@@ -254,7 +316,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${section === "Profile" ? "" : "secondary-page"}`}>
       <header className="topbar">
         <button className="brand" onClick={() => setSection("Profile")} aria-label="ResumeGPT home">
           <span className="brand-mark">R</span>
@@ -282,6 +344,11 @@ function App() {
       </header>
 
       <main className="page-content">
+        {projectsError && (
+          <p aria-live="polite" className="auth-feedback error">
+            {projectsError}
+          </p>
+        )}
         {section === "Profile" && (
           <ProfilePage
             username={username || "there"}
@@ -326,10 +393,8 @@ function App() {
               setNotice("");
               setModal("import");
             }}
-            onDelete={(id) => {
-              persistProjects(projects.filter((project) => project.id !== id));
-              setNotice("Project removed from your library.");
-            }}
+            onDelete={(id) => void handleDeleteProject(id)}
+            loading={loadingProjects}
             notice={notice}
             onDismissNotice={() => setNotice("")}
           />
@@ -368,7 +433,9 @@ function App() {
                     <input value={projectSkills} onChange={(event) => setProjectSkills(event.target.value)} placeholder="React, Testing, Leadership" />
                   </label>
                   {projectError && <p aria-live="polite" className="auth-feedback error">{projectError}</p>}
-                  <button className="primary-button" type="submit">Save project <span aria-hidden="true">→</span></button>
+                  <button className="primary-button" type="submit" disabled={savingProject}>
+                    {savingProject ? "Saving…" : "Save project"} <span aria-hidden="true">→</span>
+                  </button>
                 </form>
               </>
             ) : (
@@ -813,6 +880,7 @@ function ProjectsPage({
   onAdd,
   onImport,
   onDelete,
+  loading,
   notice,
   onDismissNotice,
 }: {
@@ -829,6 +897,7 @@ function ProjectsPage({
   onAdd: () => void;
   onImport: () => void;
   onDelete: (id: number) => void;
+  loading: boolean;
   notice: string;
   onDismissNotice: () => void;
 }) {
@@ -851,7 +920,9 @@ function ProjectsPage({
           <label className="filter-select"><span>SEMESTER</span><select aria-label="Filter by semester" onChange={(event) => onSemesterChange(event.target.value)} value={semesterFilter}><option>All semesters</option>{semesters.map((semester) => <option key={semester}>{semester}</option>)}</select></label>
           <label className="filter-select"><span>SKILL</span><select aria-label="Filter by skill" onChange={(event) => onSkillChange(event.target.value)} value={skillFilter}><option>All skills</option>{skills.map((skill) => <option key={skill}>{skill}</option>)}</select></label>
         </div>
-        {projects.length ? (
+        {loading ? (
+          <p className="muted-copy">Loading your projects…</p>
+        ) : projects.length ? (
           <div className="project-grid">
             {projects.map((project) => (
               <article className="project-card" key={project.id}>
