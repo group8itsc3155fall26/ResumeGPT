@@ -11,11 +11,20 @@ datasource db {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  username  String    @unique
-  createdAt DateTime  @default(now())
-  projects  Project[]
-  resumes   Resume[]
+  id             Int       @id @default(autoincrement())
+  username       String    @unique
+  // Default keeps the column addable on databases that already have users;
+  // the API still requires a real name when a profile is created.
+  name           String    @default("")
+  major          String    @default("Computer Science")
+  // Defaults to the sample university so seeded and demo profiles stay complete.
+  college        String    @default("UNC Charlotte")
+  // "Freshman" | "Sophomore" | "Junior" | "Senior"; validated in src/server/users.ts.
+  classStanding  String    @default("Freshman")
+  graduationYear Int?
+  createdAt      DateTime  @default(now())
+  projects       Project[]
+  resumes        Resume[]
 }
 
 model Project {
@@ -26,6 +35,8 @@ model Project {
   description String
   // SQLite has no array column, so skills is a JSON-encoded string[].
   skills      String   @default("[]")
+  // One-line outcome ("cut lookup to O((V+E) log V)") used by the resume bullet generator.
+  highlight   String?
   // "Canvas" | "Personal", matching Project["source"] in src/App.tsx.
   source      String   @default("Personal")
   userId      Int
@@ -40,9 +51,13 @@ model Resume {
   title     String
   // Display string ("October 4, 2026") to match Resume["date"] in src/App.tsx.
   date      String
+  // JSON-encoded ResumeBullet[]: { id, text, source, projectId }.
+  // Each bullet keeps its course attribution so every claim stays traceable.
+  bullets   String   @default("[]")
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
 
   @@index([userId])
 }

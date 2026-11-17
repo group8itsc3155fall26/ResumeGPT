@@ -1,136 +1,136 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-
-type Project = {
-  id: number;
-  title: string;
-  course: string;
-  semester: string;
-  description: string;
-  skills: string[];
-  source: "Canvas" | "Personal";
-};
-
-type Resume = {
-  id: number;
-  title: string;
-  date: string;
-};
-
-type NewProject = Omit<Project, "id">;
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  CLASS_STANDINGS,
+  SESSION_KEY,
+  addProject,
+  addResume,
+  createStudentProfile,
+  demoLogin,
+  editResume,
+  fetchStudent,
+  listProjects,
+  listResumes,
+  loginStudent,
+  removeProject,
+  removeResume,
+  setActiveStudent,
+  type ClassStanding,
+  type Project,
+  type Resume,
+  type ResumeBullet,
+  type Student,
+} from "./api";
+import {
+  assignmentToProject,
+  flagshipAssignment,
+  mockCanvasCourses,
+  type CanvasCourse,
+} from "./data/canvasCatalog";
+import { buildDraft } from "./lib/resumeBullets";
 
 type Section = "Profile" | "Resume" | "Projects" | "Canvas";
 type AuthMode = "login" | "create";
+type Modal = "project" | "canvas" | null;
+type Draft = {
+  mode: "create" | "edit";
+  id: number | null;
+  title: string;
+  bullets: ResumeBullet[];
+};
 
-const PROJECTS_API = "/api/projects";
-
-/** Fetch helper: the API reports validation failures as { error } with a 4xx. */
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Request failed (${response.status}).`);
-  }
-  return (response.status === 204 ? null : await response.json()) as T;
-}
-
-const postProject = (input: NewProject) =>
-  api<Project>(PROJECTS_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-
-const deleteProject = (id: number) => api<null>(`${PROJECTS_API}/${id}`, { method: "DELETE" });
-
-// Canvas demo fixtures: what the extension "syncs". Saved projects live in the database.
-const canvasProjects: Project[] = [
-  {
-    id: 1,
-    title: "Programming Assignment 4: REST API Client",
-    course: "ITSC 3155",
-    semester: "Fall 2026",
-    description:
-      "Built a command-line REST API client that validates responses, handles request failures, and presents weather data clearly.",
-    skills: ["API Integration", "JSON Processing", "Testing", "Error Handling"],
-    source: "Canvas",
-  },
-  {
-    id: 2,
-    title: "ITSC-3155 Web Application Project",
-    course: "ITSC 3155",
-    semester: "Fall 2026",
-    description:
-      "Designed and built a responsive web application with a student team, from early requirements through usability testing.",
-    skills: ["React", "TypeScript", "Teamwork"],
-    source: "Canvas",
-  },
-  {
-    id: 3,
-    title: "Database Management System",
-    course: "ITSC 3160",
-    semester: "Fall 2026",
-    description:
-      "Created a normalized relational database and documented queries for a semester-long data management project.",
-    skills: ["SQL", "Data Modeling", "Documentation"],
-    source: "Canvas",
-  },
-  {
-    id: 4,
-    title: "Personal Portfolio Website",
-    course: "Personal",
-    semester: "Spring 2026",
-    description:
-      "Built a personal portfolio to showcase selected coursework, projects, and technical skills.",
-    skills: ["React", "CSS", "Accessibility"],
-    source: "Personal",
-  },
-];
-
-const initialResumes: Resume[] = [
-  { id: 1, title: "Software Engineer Resume v2", date: "October 4, 2026" },
-  { id: 2, title: "Full-Stack Developer Resume", date: "September 28, 2026" },
-  {
-    id: 3,
-    title: "Data Structures & Algorithms Resume",
-    date: "September 15, 2026",
-  },
-];
-
-const skillOptions = [
-  "React",
-  "TypeScript",
-  "Python",
-  "SQL",
-  "Communication",
-  "Leadership",
-];
+const DEFAULT_SKILLS = ["React", "TypeScript", "Java", "SQL", "Communication", "Leadership"];
 
 function App() {
   const [section, setSection] = useState<Section>("Profile");
-  const [username, setUsername] = useState(
-    () => window.localStorage.getItem("resumegptUsername") || "",
-  );
-  const [authMode, setAuthMode] = useState<AuthMode | null>(() =>
-    window.localStorage.getItem("resumegptUsername") ? null : "login",
-  );
+  const [student, setStudent] = useState<Student | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [projectsError, setProjectsError] = useState("");
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const [modal, setModal] = useState<Modal>(null);
+  const [projectTitle, setProjectTitle] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const [projectCourse, setProjectCourse] = useState("");
+  const [projectSkills, setProjectSkills] = useState("");
+  const [projectError, setProjectError] = useState("");
   const [savingProject, setSavingProject] = useState(false);
-  const [resumes, setResumes] = useState<Resume[]>(initialResumes);
+
+  const [canvasCourse, setCanvasCourse] = useState(mockCanvasCourses[0].code);
+  const [canvasSelection, setCanvasSelection] = useState<string[]>([]);
+  const [canvasError, setCanvasError] = useState("");
+  const [importingCanvas, setImportingCanvas] = useState(false);
+
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draftError, setDraftError] = useState("");
+  const [savingDraft, setSavingDraft] = useState(false);
+
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("All courses");
   const [semesterFilter, setSemesterFilter] = useState("All semesters");
   const [skillFilter, setSkillFilter] = useState("All skills");
   const [selectedSkills, setSelectedSkills] = useState(["React", "TypeScript"]);
   const [roleDescription, setRoleDescription] = useState("");
-  const [modal, setModal] = useState<"project" | "import" | null>(null);
-  const [projectTitle, setProjectTitle] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
-  const [projectCourse, setProjectCourse] = useState("");
-  const [projectSkills, setProjectSkills] = useState("");
-  const [projectError, setProjectError] = useState("");
-  const [notice, setNotice] = useState("");
+
+  // Restore the prototype session, then confirm it still exists on the server.
+  useEffect(() => {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    if (!raw) {
+      setAuthMode("login");
+      setSessionChecked(true);
+      return;
+    }
+    let stored: Student | null = null;
+    try {
+      stored = JSON.parse(raw) as Student;
+    } catch {
+      stored = null;
+    }
+    if (!stored?.id) {
+      window.localStorage.removeItem(SESSION_KEY);
+      setAuthMode("login");
+      setSessionChecked(true);
+      return;
+    }
+    setActiveStudent(stored.id);
+    fetchStudent()
+      .then((profile) => setStudent(profile))
+      .catch(() => {
+        window.localStorage.removeItem(SESSION_KEY);
+        setActiveStudent(null);
+        setAuthMode("login");
+      })
+      .finally(() => setSessionChecked(true));
+  }, []);
+
+  useEffect(() => {
+    if (!student) return;
+    let active = true;
+    setLoadingWorkspace(true);
+    Promise.all([listProjects(), listResumes()])
+      .then(([projectRows, resumeRows]) => {
+        if (!active) return;
+        setProjects(projectRows);
+        setResumes(resumeRows);
+        setWorkspaceError("");
+      })
+      .catch((error: Error) => {
+        if (active) setWorkspaceError(`Could not load your workspace. ${error.message}`);
+      })
+      .finally(() => active && setLoadingWorkspace(false));
+    return () => {
+      active = false;
+    };
+  }, [student]);
+
+  const availableSkills = useMemo(() => {
+    const unique = [...new Set(projects.flatMap((project) => project.skills))];
+    return unique.length ? unique.slice(0, 12) : DEFAULT_SKILLS;
+  }, [projects]);
 
   const filteredProjects = useMemo(
     () =>
@@ -140,41 +140,44 @@ function App() {
         return (
           (!query || searchText.includes(query.toLowerCase())) &&
           (courseFilter === "All courses" || project.course === courseFilter) &&
-          (semesterFilter === "All semesters" ||
-            project.semester === semesterFilter) &&
+          (semesterFilter === "All semesters" || project.semester === semesterFilter) &&
           (skillFilter === "All skills" || project.skills.includes(skillFilter))
         );
       }),
     [projects, query, courseFilter, semesterFilter, skillFilter],
   );
 
-  useEffect(() => {
-    let active = true;
-    api<Project[]>(PROJECTS_API)
-      .then((rows) => {
-        if (!active) return;
-        setProjects(rows);
-        setProjectsError("");
-      })
-      .catch((error: Error) => {
-        if (active) setProjectsError(`Could not load your projects. ${error.message}`);
-      })
-      .finally(() => active && setLoadingProjects(false));
-    return () => {
-      active = false;
-    };
-  }, []);
+  const handleAuthenticated = (profile: Student) => {
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(profile));
+    setActiveStudent(profile.id);
+    setStudent(profile);
+    setAuthMode(null);
+    setSection("Profile");
+    setNotice(`Signed in as ${profile.name}.`);
+  };
+
+  const logout = () => {
+    window.localStorage.removeItem(SESSION_KEY);
+    setActiveStudent(null);
+    setStudent(null);
+    setProjects([]);
+    setResumes([]);
+    setNotice("");
+    setAuthMode("login");
+  };
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((current) =>
-      current.includes(skill)
-        ? current.filter((value) => value !== skill)
-        : [...current, skill],
+      current.includes(skill) ? current.filter((value) => value !== skill) : [...current, skill],
     );
   };
 
   const handleGenerate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!projects.length) {
+      setNotice("Import Canvas coursework or add a project before generating a resume.");
+      return;
+    }
     if (!roleDescription.trim()) {
       setNotice("Describe the role you want to target first.");
       return;
@@ -183,18 +186,72 @@ function App() {
       setNotice("Choose at least one skill to emphasize.");
       return;
     }
-    const next: Resume = {
-      id: Date.now(),
-      title: `${roleDescription.trim().split("\n")[0].slice(0, 42)} Resume`,
-      date: new Intl.DateTimeFormat("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date()),
-    };
-    setResumes((current) => [next, ...current]);
-    setNotice("Your tailored resume draft is ready in your resume library.");
-    setSection("Profile");
+    const generated = buildDraft(projects, selectedSkills, roleDescription);
+    setDraft({ mode: "create", id: null, ...generated });
+    setDraftError("");
+    setNotice("");
+  };
+
+  const openResume = (resume: Resume) => {
+    setDraft({ mode: "edit", id: resume.id, title: resume.title, bullets: resume.bullets });
+    setDraftError("");
+  };
+
+  const updateBullet = (id: string, text: string) => {
+    setDraft((current) =>
+      current
+        ? { ...current, bullets: current.bullets.map((bullet) => (bullet.id === id ? { ...bullet, text } : bullet)) }
+        : current,
+    );
+  };
+
+  const removeBullet = (id: string) => {
+    setDraft((current) =>
+      current ? { ...current, bullets: current.bullets.filter((bullet) => bullet.id !== id) } : current,
+    );
+  };
+
+  const saveDraft = async () => {
+    if (!draft) return;
+    const bullets = draft.bullets
+      .filter((bullet) => bullet.text.trim())
+      .map((bullet) => ({ ...bullet, text: bullet.text.trim() }));
+    if (!draft.title.trim()) {
+      setDraftError("Give the resume a title before saving.");
+      return;
+    }
+    if (!bullets.length) {
+      setDraftError("Keep at least one bullet in the resume.");
+      return;
+    }
+    setSavingDraft(true);
+    setDraftError("");
+    try {
+      if (draft.mode === "edit" && draft.id !== null) {
+        const updated = await editResume(draft.id, { title: draft.title.trim(), bullets });
+        setResumes((current) => current.map((resume) => (resume.id === updated.id ? updated : resume)));
+        setNotice("Resume updated.");
+      } else {
+        const created = await addResume({ title: draft.title.trim(), bullets });
+        setResumes((current) => [created, ...current]);
+        setNotice("Resume saved to your library.");
+      }
+      setDraft(null);
+    } catch (error) {
+      setDraftError(`Could not save that resume. ${(error as Error).message}`);
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleDeleteResume = async (id: number) => {
+    try {
+      await removeResume(id);
+      setResumes((current) => current.filter((resume) => resume.id !== id));
+      setNotice("Resume deleted.");
+    } catch (error) {
+      setWorkspaceError(`Could not delete that resume. ${(error as Error).message}`);
+    }
   };
 
   const handleAddProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -206,7 +263,7 @@ function App() {
     setSavingProject(true);
     setProjectError("");
     try {
-      const created = await postProject({
+      const created = await addProject({
         title: projectTitle.trim(),
         course: projectCourse.trim() || "Personal",
         semester: "Fall 2026",
@@ -215,10 +272,10 @@ function App() {
           .split(",")
           .map((skill) => skill.trim())
           .filter(Boolean),
+        highlight: null,
         source: "Personal",
       });
       setProjects((current) => [created, ...current]);
-      setProjectsError("");
       setProjectTitle("");
       setProjectDescription("");
       setProjectCourse("");
@@ -234,77 +291,94 @@ function App() {
 
   const handleDeleteProject = async (id: number) => {
     try {
-      await deleteProject(id);
+      await removeProject(id);
       setProjects((current) => current.filter((project) => project.id !== id));
-      setProjectsError("");
       setNotice("Project removed from your library.");
     } catch (error) {
-      setProjectsError(`Could not delete that project. ${(error as Error).message}`);
+      setWorkspaceError(`Could not delete that project. ${(error as Error).message}`);
     }
   };
 
-  const handleImport = async () => {
-    const existing = new Set(projects.map((project) => project.title));
-    const pending = canvasProjects.filter(
-      (project) => project.source === "Canvas" && !existing.has(project.title),
+  const openCanvasImport = () => {
+    setCanvasCourse(mockCanvasCourses[0].code);
+    setCanvasSelection([]);
+    setCanvasError("");
+    setModal("canvas");
+  };
+
+  const toggleAssignment = (id: string) => {
+    setCanvasSelection((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     );
-    if (!pending.length) {
-      setNotice("Your Canvas coursework is already up to date.");
-      setModal(null);
+  };
+
+  const selectedCourse: CanvasCourse =
+    mockCanvasCourses.find((course) => course.code === canvasCourse) ?? mockCanvasCourses[0];
+  const importedTitles = new Set(projects.map((project) => project.title));
+
+  const handleImport = async () => {
+    const assignments = selectedCourse.assignments.filter(
+      (assignment) => canvasSelection.includes(assignment.id) && !importedTitles.has(assignment.title),
+    );
+    if (!assignments.length) {
+      setCanvasError("Select at least one assignment that is not already in your library.");
       return;
     }
+    setImportingCanvas(true);
+    setCanvasError("");
     try {
       const imported: Project[] = [];
-      for (const project of pending) imported.push(await postProject(project));
+      for (const assignment of assignments) {
+        imported.push(await addProject(assignmentToProject(assignment)));
+      }
       setProjects((current) => [...imported, ...current]);
+      setCanvasSelection([]);
       setModal(null);
-      setNotice(`${imported.length} Canvas project${imported.length > 1 ? "s" : ""} imported.`);
+      setNotice(`${imported.length} Canvas assignment${imported.length > 1 ? "s" : ""} imported.`);
     } catch (error) {
-      setProjectsError(`Could not import Canvas projects. ${(error as Error).message}`);
+      setCanvasError(`Could not import those assignments. ${(error as Error).message}`);
+    } finally {
+      setImportingCanvas(false);
     }
   };
 
   const toggleCanvasFlag = async () => {
-    const canvasProject = canvasProjects[0];
-    const saved = projects.find((project) => project.title === canvasProject.title);
+    const saved = projects.find((project) => project.title === flagshipAssignment.title);
     try {
       if (saved) {
-        await deleteProject(saved.id);
+        await removeProject(saved.id);
         setProjects((current) => current.filter((project) => project.id !== saved.id));
+        setNotice("Removed from your project library.");
       } else {
-        const created = await postProject(canvasProject);
+        const created = await addProject(assignmentToProject(flagshipAssignment));
         setProjects((current) => [created, ...current]);
+        setNotice("Saved to your project library.");
       }
     } catch (error) {
-      setProjectsError(`Could not update your Canvas projects. ${(error as Error).message}`);
+      setWorkspaceError(`Could not update your project library. ${(error as Error).message}`);
     }
   };
 
-  const logout = () => {
-    window.localStorage.removeItem("resumegptUsername");
-    setUsername("");
-    setNotice("You have been logged out of this demo.");
-    setAuthMode("login");
-  };
-
-  if (authMode) {
+  if (!sessionChecked) {
     return (
-      <AuthPage
-        mode={authMode}
-        onChangeMode={setAuthMode}
-        onAuthenticated={(name) => {
-          window.localStorage.setItem("resumegptUsername", name);
-          setUsername(name);
-          setAuthMode(null);
-          setSection("Profile");
-        }}
-      />
+      <div className="app-shell">
+        <main className="page-content">
+          <p className="muted-copy">Loading your workspace…</p>
+        </main>
+      </div>
     );
   }
 
+  if (authMode) {
+    return <AuthPage mode={authMode} onChangeMode={setAuthMode} onAuthenticated={handleAuthenticated} />;
+  }
+
+  if (!student) {
+    return <AuthPage mode="login" onChangeMode={setAuthMode} onAuthenticated={handleAuthenticated} />;
+  }
+
   if (section === "Canvas") {
-    const canvasProject = canvasProjects[0];
-    const isFlagged = projects.some((project) => project.title === canvasProject.title);
+    const isFlagged = projects.some((project) => project.title === flagshipAssignment.title);
     return (
       <CanvasPage
         flagged={isFlagged}
@@ -338,22 +412,28 @@ function App() {
           ))}
         </nav>
         <div className="top-actions">
-          <button className="extension-badge" onClick={() => setSection("Canvas")}>Test-Canvas-Extension</button>
-          <button className="logout-button" onClick={logout}>Log out</button>
+          <button className="extension-badge" onClick={() => setSection("Canvas")}>
+            Test-Canvas-Extension
+          </button>
+          <button className="logout-button" onClick={logout}>
+            Log out
+          </button>
         </div>
       </header>
 
       <main className="page-content">
-        {projectsError && (
+        {workspaceError && (
           <p aria-live="polite" className="auth-feedback error">
-            {projectsError}
+            {workspaceError}
           </p>
         )}
+
         {section === "Profile" && (
           <ProfilePage
-            username={username || "there"}
+            student={student}
             resumes={resumes}
             projects={projects}
+            loading={loadingWorkspace}
             onNavigate={setSection}
             notice={notice}
             onDismissNotice={() => setNotice("")}
@@ -362,11 +442,16 @@ function App() {
 
         {section === "Resume" && (
           <ResumePage
+            availableSkills={availableSkills}
             selectedSkills={selectedSkills}
             onToggleSkill={toggleSkill}
             roleDescription={roleDescription}
             onRoleChange={setRoleDescription}
             onSubmit={handleGenerate}
+            resumes={resumes}
+            loadingResumes={loadingWorkspace}
+            onOpenResume={openResume}
+            onDeleteResume={(id) => void handleDeleteResume(id)}
             notice={notice}
             onDismissNotice={() => setNotice("")}
           />
@@ -389,12 +474,9 @@ function App() {
               setProjectError("");
               setModal("project");
             }}
-            onImport={() => {
-              setNotice("");
-              setModal("import");
-            }}
+            onImport={openCanvasImport}
             onDelete={(id) => void handleDeleteProject(id)}
-            loading={loadingProjects}
+            loading={loadingWorkspace}
             notice={notice}
             onDismissNotice={() => setNotice("")}
           />
@@ -409,7 +491,9 @@ function App() {
           }}
         >
           <section aria-labelledby="modal-heading" aria-modal="true" className="dialog" role="dialog">
-            <button className="dialog-close" onClick={() => setModal(null)} aria-label="Close dialog">×</button>
+            <button className="dialog-close" onClick={() => setModal(null)} aria-label="Close dialog">
+              ×
+            </button>
             {modal === "project" ? (
               <>
                 <p className="eyebrow">PERSONAL EXPERIENCE</p>
@@ -418,21 +502,42 @@ function App() {
                 <form className="project-form" onSubmit={handleAddProject}>
                   <label>
                     Project name
-                    <input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} placeholder="e.g. Portfolio website" />
+                    <input
+                      value={projectTitle}
+                      onChange={(event) => setProjectTitle(event.target.value)}
+                      placeholder="e.g. Portfolio website"
+                    />
                   </label>
                   <label>
                     Description
-                    <textarea value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} placeholder="What did you build or accomplish?" rows={3} />
+                    <textarea
+                      value={projectDescription}
+                      onChange={(event) => setProjectDescription(event.target.value)}
+                      placeholder="What did you build or accomplish?"
+                      rows={3}
+                    />
                   </label>
                   <label>
                     Course or category
-                    <input value={projectCourse} onChange={(event) => setProjectCourse(event.target.value)} placeholder="e.g. ITSC 3155 or Personal" />
+                    <input
+                      value={projectCourse}
+                      onChange={(event) => setProjectCourse(event.target.value)}
+                      placeholder="e.g. ITSC 3155 or Personal"
+                    />
                   </label>
                   <label>
                     Skills <span className="label-hint">Separate with commas</span>
-                    <input value={projectSkills} onChange={(event) => setProjectSkills(event.target.value)} placeholder="React, Testing, Leadership" />
+                    <input
+                      value={projectSkills}
+                      onChange={(event) => setProjectSkills(event.target.value)}
+                      placeholder="React, Testing, Leadership"
+                    />
                   </label>
-                  {projectError && <p aria-live="polite" className="auth-feedback error">{projectError}</p>}
+                  {projectError && (
+                    <p aria-live="polite" className="auth-feedback error">
+                      {projectError}
+                    </p>
+                  )}
                   <button className="primary-button" type="submit" disabled={savingProject}>
                     {savingProject ? "Saving…" : "Save project"} <span aria-hidden="true">→</span>
                   </button>
@@ -440,115 +545,161 @@ function App() {
               </>
             ) : (
               <>
-                <p className="eyebrow">CANVAS INTEGRATION</p>
+                <p className="eyebrow">CANVAS INTEGRATION · MOCKED</p>
                 <h2 id="modal-heading">Import coursework</h2>
-                <p className="muted-copy">Sync coursework projects from your connected Canvas account into your experience library.</p>
-                <div className="canvas-notice"><span className="status-dot" /> Canvas connection ready</div>
+                <p className="muted-copy">
+                  Choose a course, then pick the assignments to turn into portfolio projects. This
+                  build ships a realistic mock catalog instead of live Canvas calls.
+                </p>
+                <div className="course-tabs" role="tablist" aria-label="Canvas courses">
+                  {mockCanvasCourses.map((course) => (
+                    <button
+                      aria-pressed={course.code === selectedCourse.code}
+                      className={`course-tab ${course.code === selectedCourse.code ? "selected" : ""}`}
+                      key={course.code}
+                      onClick={() => {
+                        setCanvasCourse(course.code);
+                        setCanvasSelection([]);
+                        setCanvasError("");
+                      }}
+                      role="tab"
+                    >
+                      {course.code}
+                    </button>
+                  ))}
+                </div>
+                <p className="course-caption">
+                  {selectedCourse.name} · {selectedCourse.semester} · {selectedCourse.instructor}
+                </p>
+                <div className="assignment-list">
+                  {selectedCourse.assignments.map((assignment) => {
+                    const alreadyImported = importedTitles.has(assignment.title);
+                    const selected = canvasSelection.includes(assignment.id);
+                    return (
+                      <label
+                        className={`assignment-option ${selected ? "selected" : ""} ${
+                          alreadyImported ? "imported" : ""
+                        }`}
+                        key={assignment.id}
+                      >
+                        <input
+                          checked={selected || alreadyImported}
+                          disabled={alreadyImported}
+                          onChange={() => toggleAssignment(assignment.id)}
+                          type="checkbox"
+                        />
+                        <span className="assignment-body">
+                          <strong>{assignment.title}</strong>
+                          <small>
+                            {assignment.points} pts · {assignment.submission.type} · due {assignment.dueDate}
+                          </small>
+                          <span className="tag-list">
+                            {assignment.skills.slice(0, 3).map((skill) => (
+                              <span className="tag" key={skill}>
+                                {skill}
+                              </span>
+                            ))}
+                            {alreadyImported && <span className="tag imported-tag">In library</span>}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {canvasError && (
+                  <p aria-live="polite" className="auth-feedback error">
+                    {canvasError}
+                  </p>
+                )}
                 <div className="dialog-actions">
-                  <button className="secondary-button" onClick={() => setModal(null)}>Cancel</button>
-                  <button className="primary-button" onClick={handleImport}>Import projects <span aria-hidden="true">→</span></button>
+                  <button className="secondary-button" onClick={() => setModal(null)}>
+                    Cancel
+                  </button>
+                  <button className="primary-button" onClick={() => void handleImport()} disabled={importingCanvas}>
+                    {importingCanvas
+                      ? "Importing…"
+                      : `Import ${canvasSelection.length || ""} assignment${
+                          canvasSelection.length === 1 ? "" : "s"
+                        }`}{" "}
+                    <span aria-hidden="true">→</span>
+                  </button>
                 </div>
               </>
             )}
           </section>
         </div>
       )}
-    </div>
-  );
-}
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="eyebrow">{children}</p>;
-}
-
-function CanvasPage({
-  flagged,
-  onToggleFlag,
-  onViewProjects,
-  onReturn,
-}: {
-  flagged: boolean;
-  onToggleFlag: () => void;
-  onViewProjects: () => void;
-  onReturn: () => void;
-}) {
-  return (
-    <main className="canvas-demo">
-      <header className="canvas-topbar">
-        <button className="canvas-menu" aria-label="Open course menu">☰</button>
-        <div className="canvas-crumbs">
-          <strong>ITSC 3155 - 001</strong><span>›</span><strong>Assignments</strong><span>›</span><span>Programming Assignment 4</span>
-        </div>
-        <button className="canvas-student">Student View</button>
-      </header>
-      <div className="canvas-layout">
-        <nav className="canvas-rail" aria-label="Canvas global navigation">
-          <div className="canvas-flower" aria-hidden="true">✿</div>
-          <button><span>♙</span>Account</button>
-          <button><span>▦</span>Dashboard</button>
-          <button className="rail-selected"><span>◇</span>Courses</button>
-          <button><span>▣</span>Calendar</button>
-          <button><span>▱</span>Inbox</button>
-          <button><span>ⓘ</span>Help</button>
-        </nav>
-        <nav className="canvas-course-nav" aria-label="Course navigation">
-          {["Home", "Announcements", "Syllabus", "Modules", "Assignments", "Discussions", "Grades", "People", "Pages", "Files", "Quizzes", "Collaborations"].map((item) => (
-            <button className={item === "Assignments" ? "course-selected" : ""} key={item}>{item}</button>
-          ))}
-        </nav>
-        <section className="canvas-assignment">
-          <div className="canvas-assignment-title">
-            <div><h1>Programming Assignment 4: REST API Client</h1><p>Due Friday by 11:59pm</p></div>
-            <span className="published-state">✓ &nbsp;Published</span>
-          </div>
-          <div className="canvas-details">
-            <span><strong>Points</strong> 100</span>
-            <span><strong>Submitting</strong> a file upload</span>
-            <span><strong>File types</strong> zip</span>
-          </div>
-          <section className="assignment-copy">
-            <h2>Overview</h2>
-            <p>In this assignment, you will build a command-line application that retrieves data from a public REST API, validates the response, and presents useful results to the user. Your program should demonstrate clean module design, asynchronous programming, and thoughtful error handling.</p>
-            <div className="learning-callout"><strong>Learning objectives</strong><span>Practice API integration, JSON data processing, input validation, testing, and technical documentation.</span></div>
-            <h2>Requirements</h2>
-            <ol>
-              <li>Create a Node.js project using JavaScript or TypeScript. Keep API logic, formatting, and user input in separate modules.</li>
-              <li>Accept a city name from the command line and request current conditions from the provided weather API endpoint.</li>
-              <li>Display the city, temperature, conditions, humidity, and the time the result was retrieved.</li>
-              <li>Handle missing input, unsuccessful requests, rate limits, and incomplete response data without crashing.</li>
-              <li>Write at least five automated tests covering successful and unsuccessful requests.</li>
-            </ol>
-            <h2>Starter files</h2>
-            <button className="starter-file"><span className="file-icon">▯</span><span><strong>pa4-starter.zip</strong><small>Starter repository and sample API response</small></span></button>
-            <h2>Submission</h2>
-            <p>Submit one ZIP file containing your source code, tests, <code>package.json</code>, and a README with setup instructions. Do not include <code>node_modules</code> or API keys.</p>
+      {draft && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDraft(null);
+          }}
+        >
+          <section aria-labelledby="draft-heading" aria-modal="true" className="dialog wide" role="dialog">
+            <button className="dialog-close" onClick={() => setDraft(null)} aria-label="Close dialog">
+              ×
+            </button>
+            <p className="eyebrow">
+              {draft.mode === "create" ? "DRAFT REVIEW · AI ANALYSIS" : "SAVED RESUME"}
+            </p>
+            <h2 id="draft-heading">
+              {draft.mode === "create" ? "Review your bullets" : "Edit resume"}
+            </h2>
+            <p className="muted-copy">
+              Every bullet keeps the coursework it came from. Edit the wording, drop anything that
+              overstates your work, then save.
+            </p>
+            <div className="project-form">
+              <label>
+                Resume title
+                <input
+                  value={draft.title}
+                  onChange={(event) =>
+                    setDraft((current) => (current ? { ...current, title: event.target.value } : current))
+                  }
+                />
+              </label>
+              <div className="bullet-editor">
+                {draft.bullets.length ? (
+                  draft.bullets.map((bullet) => (
+                    <div className="bullet-row" key={bullet.id}>
+                      <span className="source-badge">Source: {bullet.source}</span>
+                      <textarea
+                        aria-label={`Bullet for ${bullet.source}`}
+                        onChange={(event) => updateBullet(bullet.id, event.target.value)}
+                        rows={3}
+                        value={bullet.text}
+                      />
+                      <button className="bullet-remove" onClick={() => removeBullet(bullet.id)} type="button">
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted-copy">No bullets left. Cancel and generate a new draft.</p>
+                )}
+              </div>
+              {draftError && (
+                <p aria-live="polite" className="auth-feedback error">
+                  {draftError}
+                </p>
+              )}
+              <button
+                className="primary-button"
+                disabled={savingDraft}
+                onClick={() => void saveDraft()}
+                type="button"
+              >
+                {savingDraft ? "Saving…" : draft.mode === "create" ? "Approve & save resume" : "Save changes"}{" "}
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
           </section>
-          <button className="canvas-return" onClick={onReturn}>← Return to ResumeGPT</button>
-        </section>
-        <aside className="canvas-submit">
-          <button>Submit Assignment</button>
-          <a href="#rubric">▫ &nbsp; View Rubric</a>
-          <a href="#submission">▫ &nbsp; Show By Type</a>
-          <hr />
-          <h2>Submission</h2>
-          <strong>Not Submitted!</strong>
-          <p>No submission has been made.</p>
-        </aside>
-      </div>
-      <aside className="extension-card" aria-label="ResumeGPT Canvas extension">
-        <div className="extension-heading"><span className="brand-mark">R</span><span><strong>ResumeGPT</strong><small>Chrome extension test</small></span></div>
-        <p>Save this assignment as a project and use it when building your next resume.</p>
-        <button className={`flag-button ${flagged ? "flagged" : ""}`} onClick={onToggleFlag}>
-          {flagged ? "Flagged for ResumeGPT" : "Flag for ResumeGPT"}
-        </button>
-        {flagged && (
-          <div className="extension-saved">
-            This assignment is already in your project library.
-            <button onClick={onViewProjects}>View Projects</button>
-          </div>
-        )}
-      </aside>
-    </main>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -559,41 +710,56 @@ function AuthPage({
 }: {
   mode: AuthMode;
   onChangeMode: (mode: AuthMode) => void;
-  onAuthenticated: (username: string) => void;
+  onAuthenticated: (student: Student) => void;
 }) {
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState("");
+  const [major, setMajor] = useState("Computer Science");
+  const [college, setCollege] = useState("UNC Charlotte");
+  const [classStanding, setClassStanding] = useState<ClassStanding>("Freshman");
+  const [graduationYear, setGraduationYear] = useState("");
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState<"login" | "create" | "demo" | null>(null);
   const isCreate = mode === "create";
 
   const switchMode = (next: AuthMode) => {
     onChangeMode(next);
     setError("");
-    setMessage("");
-    setConfirmPassword("");
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    setMessage("");
-    const name = username.trim();
-    if (!name) {
-      setError("Enter your username to continue.");
-      return;
+    setBusy(isCreate ? "create" : "login");
+    try {
+      const student = isCreate
+        ? await createStudentProfile({
+            username,
+            name,
+            major,
+            college,
+            classStanding,
+            graduationYear: graduationYear ? Number(graduationYear) : null,
+          })
+        : await loginStudent(username);
+      onAuthenticated(student);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
     }
-    if (password.length < 6) {
-      setError("Your password must contain at least 6 characters.");
-      return;
+  };
+
+  const signInAsDemo = async () => {
+    setError("");
+    setBusy("demo");
+    try {
+      onAuthenticated(await demoLogin());
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
     }
-    if (isCreate && password !== confirmPassword) {
-      setError("Your passwords do not match.");
-      return;
-    }
-    onAuthenticated(name);
   };
 
   return (
@@ -602,23 +768,30 @@ function AuthPage({
         <div className="story-orbit story-orbit-one" />
         <div className="story-orbit story-orbit-two" />
         <button className="brand auth-brand" aria-label="ResumeGPT">
-          <span className="brand-mark">R</span><span>ResumeGPT</span>
+          <span className="brand-mark">R</span>
+          <span>ResumeGPT</span>
         </button>
         <div className="story-copy">
-          <Eyebrow>YOUR EXPERIENCE, CLEARLY TOLD</Eyebrow>
-          <h1>Make every<br />word earn its<br />place.</h1>
-          <p>Turn your experience into a focused resume built for the role you want next.</p>
+          <p className="eyebrow">YOUR EXPERIENCE, CLEARLY TOLD</p>
+          <h1>
+            Make every
+            <br />
+            word earn its
+            <br />
+            place.
+          </h1>
+          <p>Turn the coursework you already did into a resume you can defend, line by line.</p>
         </div>
         <p className="story-footer">Thoughtful writing. Professional results.</p>
       </section>
       <section className="auth-form-side">
         <div className="auth-form-wrap">
           <p className="auth-welcome">{isCreate ? "Start building" : "Welcome back"}</p>
-          <h2>{isCreate ? "Create your account" : "Log in to your account"}</h2>
+          <h2>{isCreate ? "Create your student profile" : "Log in to ResumeGPT"}</h2>
           <p className="auth-subtitle">
             {isCreate
-              ? "Create an account and start your first resume."
-              : "Continue where you left off."}
+              ? "Add your details once; they follow you to every resume."
+              : "Use the username your profile was created with."}
           </p>
           <form className="auth-form" onSubmit={submit} noValidate>
             <label htmlFor="auth-username">Username</label>
@@ -626,77 +799,375 @@ function AuthPage({
               autoComplete="username"
               id="auth-username"
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="Enter your username"
+              placeholder="e.g. jmoten"
               value={username}
             />
-            <div className="auth-password-label">
-              <label htmlFor="auth-password">Password</label>
-              {!isCreate && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setMessage(
-                      username.trim()
-                        ? `Recovery instructions are ready for ${username.trim()}.`
-                        : "Enter your username first, then request recovery instructions.",
-                    );
-                  }}
-                >
-                  Forgot password?
-                </button>
-              )}
-            </div>
-            <div className="auth-password-field">
-              <input
-                autoComplete={isCreate ? "new-password" : "current-password"}
-                id="auth-password"
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="At least 6 characters"
-                type={showPassword ? "text" : "password"}
-                value={password}
-              />
-              <button type="button" onClick={() => setShowPassword((value) => !value)}>
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
             {isCreate && (
               <>
-                <label htmlFor="confirm-password">Confirm password</label>
+                <label htmlFor="auth-name">Full name</label>
                 <input
-                  autoComplete="new-password"
-                  id="confirm-password"
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Enter your password again"
-                  type={showPassword ? "text" : "password"}
-                  value={confirmPassword}
+                  id="auth-name"
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Jordan Moten"
+                  value={name}
                 />
+                <div className="field-row">
+                  <label htmlFor="auth-major">Major</label>
+                  <label htmlFor="auth-college">College</label>
+                </div>
+                <div className="field-row">
+                  <input
+                    id="auth-major"
+                    onChange={(event) => setMajor(event.target.value)}
+                    value={major}
+                  />
+                  <input
+                    id="auth-college"
+                    onChange={(event) => setCollege(event.target.value)}
+                    value={college}
+                  />
+                </div>
+                <div className="field-row">
+                  <label htmlFor="auth-standing">Class standing</label>
+                  <label htmlFor="auth-year">Graduation year</label>
+                </div>
+                <div className="field-row">
+                  <select
+                    id="auth-standing"
+                    onChange={(event) => setClassStanding(event.target.value as ClassStanding)}
+                    value={classStanding}
+                  >
+                    {CLASS_STANDINGS.map((standing) => (
+                      <option key={standing}>{standing}</option>
+                    ))}
+                  </select>
+                  <input
+                    id="auth-year"
+                    inputMode="numeric"
+                    onChange={(event) => setGraduationYear(event.target.value)}
+                    placeholder="2027"
+                    value={graduationYear}
+                  />
+                </div>
               </>
             )}
-            {(error || message) && (
-              <p aria-live="polite" className={`auth-feedback ${error ? "error" : ""}`}>
-                {error || message}
+            {error && (
+              <p aria-live="polite" className="auth-feedback error">
+                {error}
               </p>
             )}
-            <button className="primary-button auth-submit" type="submit">
-              {isCreate ? "Create account" : "Log in"}
+            <button className="primary-button auth-submit" disabled={busy !== null} type="submit">
+              {busy === "create" ? "Creating…" : busy === "login" ? "Logging in…" : isCreate ? "Create profile" : "Log in"}
             </button>
           </form>
+          <button
+            className="secondary-button demo-button"
+            disabled={busy !== null}
+            onClick={() => void signInAsDemo()}
+            type="button"
+          >
+            {busy === "demo" ? "Loading demo…" : "Continue as Demo Student"}
+          </button>
           <p className="auth-switch">
-            {isCreate ? "Already have an account?" : "New to ResumeGPT?"}{" "}
+            {isCreate ? "Already have a profile?" : "New to ResumeGPT?"}{" "}
             <button onClick={() => switchMode(isCreate ? "login" : "create")}>
-              {isCreate ? "Log in" : "Create account"}
+              {isCreate ? "Log in" : "Create profile"}
             </button>
           </p>
           <p className="privacy-copy">
-            Your profile name may be shared with ResumeGPT. Never submit passwords you use elsewhere.{" "}
-            <button onClick={() => setMessage("Your login details stay in this demo and are not sent anywhere.")}>
-              Learn how we handle your data
-            </button>
+            Prototype sign-in: this build keeps a student id on your device, not a password. Never
+            enter a password you use elsewhere.
           </p>
         </div>
       </section>
     </main>
+  );
+}
+
+function Notice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  if (!message) return null;
+  return (
+    <div aria-live="polite" className="notice">
+      <span>{message}</span>
+      <button aria-label="Dismiss message" onClick={onDismiss}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+function ProfilePage({
+  student,
+  resumes,
+  projects,
+  loading,
+  onNavigate,
+  notice,
+  onDismissNotice,
+}: {
+  student: Student;
+  resumes: Resume[];
+  projects: Project[];
+  loading: boolean;
+  onNavigate: (section: Section) => void;
+  notice: string;
+  onDismissNotice: () => void;
+}) {
+  return (
+    <>
+      <div className="profile-hero">
+        <p className="eyebrow">STUDENT WORKSPACE</p>
+        <h1>
+          Welcome back,
+          <br />
+          {student.name.split(" ")[0]}.
+        </h1>
+        <p>Keep your experience current and your next application ready.</p>
+      </div>
+      <Notice message={notice} onDismiss={onDismissNotice} />
+      <div className="dashboard-grid">
+        <div className="dashboard-main">
+          <section className="surface-card recent-card">
+            <SectionHeading
+              eyebrow="RESUME LIBRARY"
+              title="Recent resumes"
+              action="View all"
+              onAction={() => onNavigate("Resume")}
+            />
+            <div className="resume-list">
+              {loading ? (
+                <p className="muted-copy">Loading your resumes…</p>
+              ) : resumes.length ? (
+                resumes.slice(0, 3).map((resume, index) => (
+                  <button className="resume-row" key={resume.id} onClick={() => onNavigate("Resume")}>
+                    <span className="resume-number">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="resume-info">
+                      <strong>{resume.title}</strong>
+                      <small>
+                        Created {resume.date} · {resume.bullets.length} bullet
+                        {resume.bullets.length === 1 ? "" : "s"}
+                      </small>
+                    </span>
+                    <span className="row-action">Open</span>
+                  </button>
+                ))
+              ) : (
+                <p className="muted-copy">No saved resumes yet. Generate one from your projects.</p>
+              )}
+            </div>
+          </section>
+          <section className="surface-card recent-card projects-preview">
+            <SectionHeading
+              eyebrow="SYNCED COURSEWORK"
+              title="Recent projects"
+              action="View all"
+              onAction={() => onNavigate("Projects")}
+            />
+            <div className="resume-list">
+              {projects.slice(0, 2).map((project) => (
+                <button className="resume-row" key={project.id} onClick={() => onNavigate("Projects")}>
+                  <span className="resume-number">
+                    <span className="tiny-dot" />
+                  </span>
+                  <span className="resume-info">
+                    <strong>{project.title}</strong>
+                    <small>
+                      {project.course} &nbsp;·&nbsp; {project.semester}
+                    </small>
+                  </span>
+                  <span className="row-action">Open</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+        <aside className="profile-card">
+          <div className="avatar">
+            <span />
+          </div>
+          <p className="eyebrow">YOUR PROFILE</p>
+          <h2>{student.name}</h2>
+          <dl>
+            <div>
+              <dt>College</dt>
+              <dd>{student.college}</dd>
+            </div>
+            <div>
+              <dt>Major</dt>
+              <dd>{student.major}</dd>
+            </div>
+            <div>
+              <dt>Standing</dt>
+              <dd>{student.classStanding}</dd>
+            </div>
+            <div>
+              <dt>Graduation</dt>
+              <dd>{student.graduationYear ?? "Not set"}</dd>
+            </div>
+          </dl>
+          <p className="profile-footnote">
+            ResumeGPT syncs coursework to turn your experience into a stronger resume.
+          </p>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function ResumePage({
+  availableSkills,
+  selectedSkills,
+  onToggleSkill,
+  roleDescription,
+  onRoleChange,
+  onSubmit,
+  resumes,
+  loadingResumes,
+  onOpenResume,
+  onDeleteResume,
+  notice,
+  onDismissNotice,
+}: {
+  availableSkills: string[];
+  selectedSkills: string[];
+  onToggleSkill: (skill: string) => void;
+  roleDescription: string;
+  onRoleChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  resumes: Resume[];
+  loadingResumes: boolean;
+  onOpenResume: (resume: Resume) => void;
+  onDeleteResume: (id: number) => void;
+  notice: string;
+  onDismissNotice: () => void;
+}) {
+  return (
+    <>
+      <div className="resume-hero">
+        <div>
+          <p className="eyebrow">AI RESUME STUDIO</p>
+          <h1>
+            Build a resume that
+            <br />
+            sounds like you.
+          </h1>
+        </div>
+        <p>
+          Tell ResumeGPT about the role you want, choose the skills to highlight, and get a tailored
+          first draft you can edit before saving.
+        </p>
+      </div>
+      <Notice message={notice} onDismiss={onDismissNotice} />
+      <div className="resume-studio">
+        <aside className="skills-panel">
+          <div>
+            <p className="eyebrow">YOUR PROFILE</p>
+            <h2>Choose skills</h2>
+            <p>Select the strengths you want ResumeGPT to emphasize.</p>
+          </div>
+          <div className="skill-list">
+            {availableSkills.map((skill) => (
+              <button
+                aria-pressed={selectedSkills.includes(skill)}
+                className={`skill-option ${selectedSkills.includes(skill) ? "selected" : ""}`}
+                key={skill}
+                onClick={() => onToggleSkill(skill)}
+              >
+                {skill}
+                <span className="checkbox" />
+              </button>
+            ))}
+          </div>
+        </aside>
+        <section className="chat-panel">
+          <header className="chat-header">
+            <div className="assistant-id">
+              <span className="brand-mark">R</span>
+              <span>
+                <strong>ResumeGPT</strong>
+                <small>
+                  <i className="status-dot" /> Ready to help
+                </small>
+              </span>
+            </div>
+            <button className="secondary-button compact" onClick={() => onRoleChange("")}>
+              New draft
+            </button>
+          </header>
+          <div className="conversation">
+            <div className="assistant-message">
+              <span className="brand-mark small">R</span>
+              <div>
+                <strong>ResumeGPT</strong>
+                <p>
+                  What kind of role are you applying for? I will pull from your saved coursework and
+                  draft bullets you can review before they reach a resume.
+                </p>
+                <div className="suggestions">
+                  {[
+                    "Software engineering internship",
+                    "Entry-level data analyst",
+                    "Highlight project leadership",
+                  ].map((suggestion) => (
+                    <button key={suggestion} onClick={() => onRoleChange(suggestion)}>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <form className="composer" onSubmit={onSubmit}>
+            <textarea
+              aria-label="Describe your target role"
+              onChange={(event) => onRoleChange(event.target.value)}
+              placeholder="Describe the role you want to target..."
+              rows={3}
+              value={roleDescription}
+            />
+            <div className="composer-footer">
+              <span>{selectedSkills.length} skills selected</span>
+              <button className="primary-button" type="submit">
+                Generate resume <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <section className="surface-card library-card resume-library">
+        <SectionHeading eyebrow="SAVED RESUME" title="Resume library" />
+        <div className="library-count">{resumes.length} saved</div>
+        <div className="resume-list">
+          {loadingResumes ? (
+            <p className="muted-copy">Loading your resumes…</p>
+          ) : resumes.length ? (
+            resumes.map((resume, index) => (
+              <div className="resume-row" key={resume.id}>
+                <span className="resume-number">{String(index + 1).padStart(2, "0")}</span>
+                <span className="resume-info">
+                  <strong>{resume.title}</strong>
+                  <small>
+                    Created {resume.date} · {resume.bullets.length} bullet
+                    {resume.bullets.length === 1 ? "" : "s"}
+                  </small>
+                </span>
+                <button className="row-action" onClick={() => onOpenResume(resume)}>
+                  Edit
+                </button>
+                <button className="row-action destructive" onClick={() => onDeleteResume(resume.id)}>
+                  Delete
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="muted-copy">
+              Nothing saved yet. Describe a target role above and generate your first draft.
+            </p>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -714,155 +1185,15 @@ function SectionHeading({
   return (
     <div className="section-heading">
       <div>
-        <Eyebrow>{eyebrow}</Eyebrow>
+        <p className="eyebrow">{eyebrow}</p>
         <h2>{title}</h2>
       </div>
-      {action && <button className="text-action" onClick={onAction}>{action} <span aria-hidden="true">→</span></button>}
+      {action && (
+        <button className="text-action" onClick={onAction}>
+          {action} <span aria-hidden="true">→</span>
+        </button>
+      )}
     </div>
-  );
-}
-
-function Notice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  if (!message) return null;
-  return (
-    <div aria-live="polite" className="notice">
-      <span>{message}</span>
-      <button aria-label="Dismiss message" onClick={onDismiss}>×</button>
-    </div>
-  );
-}
-
-function ProfilePage({
-  username,
-  resumes,
-  projects,
-  onNavigate,
-  notice,
-  onDismissNotice,
-}: {
-  username: string;
-  resumes: Resume[];
-  projects: Project[];
-  onNavigate: (section: Section) => void;
-  notice: string;
-  onDismissNotice: () => void;
-}) {
-  return (
-    <>
-      <div className="profile-hero">
-        <Eyebrow>STUDENT WORKSPACE</Eyebrow>
-        <h1>Welcome back,<br />{username}.</h1>
-        <p>Keep your experience current and your next application ready.</p>
-      </div>
-      <Notice message={notice} onDismiss={onDismissNotice} />
-      <div className="dashboard-grid">
-        <div className="dashboard-main">
-          <section className="surface-card recent-card">
-            <SectionHeading eyebrow="RESUME LIBRARY" title="Recent resumes" action="View all" onAction={() => onNavigate("Resume")} />
-            <div className="resume-list">
-              {resumes.slice(0, 3).map((resume, index) => (
-                <button className="resume-row" key={resume.id} onClick={() => onNavigate("Resume")}>
-                  <span className="resume-number">{String(index + 1).padStart(2, "0")}</span>
-                  <span className="resume-info"><strong>{resume.title}</strong><small>Created {resume.date}</small></span>
-                  <span className="row-action">Open</span>
-                </button>
-              ))}
-            </div>
-          </section>
-          <section className="surface-card recent-card projects-preview">
-            <SectionHeading eyebrow="SYNCED COURSEWORK" title="Recent projects" action="View all" onAction={() => onNavigate("Projects")} />
-            <div className="resume-list">
-              {projects.slice(0, 2).map((project) => (
-                <button className="resume-row" key={project.id} onClick={() => onNavigate("Projects")}>
-                  <span className="resume-number"><span className="tiny-dot" /></span>
-                  <span className="resume-info"><strong>{project.title}</strong><small>{project.course} &nbsp;·&nbsp; {project.semester}</small></span>
-                  <span className="row-action">Open</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-        <aside className="profile-card">
-          <div className="avatar"><span /></div>
-          <Eyebrow>YOUR PROFILE</Eyebrow>
-          <h2>{username}</h2>
-          <dl>
-            <div><dt>School</dt><dd>UNC Charlotte</dd></div>
-            <div><dt>Major</dt><dd>Computer Science</dd></div>
-            <div><dt>Graduation</dt><dd>Spring 2027</dd></div>
-          </dl>
-          <p className="profile-footnote">ResumeGPT syncs coursework to turn your experience into a stronger resume.</p>
-        </aside>
-      </div>
-    </>
-  );
-}
-
-function ResumePage({
-  selectedSkills,
-  onToggleSkill,
-  roleDescription,
-  onRoleChange,
-  onSubmit,
-  notice,
-  onDismissNotice,
-}: {
-  selectedSkills: string[];
-  onToggleSkill: (skill: string) => void;
-  roleDescription: string;
-  onRoleChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  notice: string;
-  onDismissNotice: () => void;
-}) {
-  return (
-    <>
-      <div className="resume-hero">
-        <div><Eyebrow>AI RESUME STUDIO</Eyebrow><h1>Build a resume that<br />sounds like you.</h1></div>
-        <p>Tell ResumeGPT about the role you want, choose the skills to highlight, and get a tailored first draft.</p>
-      </div>
-      <Notice message={notice} onDismiss={onDismissNotice} />
-      <div className="resume-studio">
-        <aside className="skills-panel">
-          <div><Eyebrow>YOUR PROFILE</Eyebrow><h2>Choose skills</h2><p>Select the strengths you want ResumeGPT to emphasize.</p></div>
-          <div className="skill-list">
-            {skillOptions.map((skill) => (
-              <button
-                aria-pressed={selectedSkills.includes(skill)}
-                className={`skill-option ${selectedSkills.includes(skill) ? "selected" : ""}`}
-                key={skill}
-                onClick={() => onToggleSkill(skill)}
-              >
-                {skill}<span className="checkbox" />
-              </button>
-            ))}
-          </div>
-          <div className="student-mini"><span className="mini-avatar">JB</span><span><strong>John Bob</strong><small>Computer Science · 2027</small></span></div>
-        </aside>
-        <section className="chat-panel">
-          <header className="chat-header">
-            <div className="assistant-id"><span className="brand-mark">R</span><span><strong>ResumeGPT</strong><small><i className="status-dot" /> Ready to help</small></span></div>
-            <button className="secondary-button compact" onClick={() => onRoleChange("")}>New draft</button>
-          </header>
-          <div className="conversation">
-            <div className="assistant-message">
-              <span className="brand-mark small">R</span>
-              <div><strong>ResumeGPT</strong><p>What kind of role are you applying for? Share the job, company, or experience you want your resume to emphasize.</p>
-                <div className="suggestions">
-                  {["Software engineering internship", "Entry-level data analyst", "Highlight project leadership"].map((suggestion) => (
-                    <button key={suggestion} onClick={() => onRoleChange(suggestion)}>{suggestion}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          <form className="composer" onSubmit={onSubmit}>
-            <textarea aria-label="Describe your target role" onChange={(event) => onRoleChange(event.target.value)} placeholder="Describe the role you want to target..." rows={3} value={roleDescription} />
-            <div className="composer-footer"><span>{selectedSkills.length} skills selected</span><button className="primary-button" type="submit">Generate resume <span aria-hidden="true">→</span></button></div>
-          </form>
-        </section>
-      </div>
-    </>
   );
 }
 
@@ -907,18 +1238,82 @@ function ProjectsPage({
   return (
     <>
       <div className="projects-hero">
-        <div><Eyebrow>EXPERIENCE LIBRARY</Eyebrow><h1>Your work,<br />ready to use.</h1><p>Keep coursework and personal projects organized so ResumeGPT<br className="desktop-break" /> can turn your experience into stronger resume bullets.</p></div>
-        <div className="hero-actions"><button className="secondary-button" onClick={onImport}>Import from Canvas</button><button className="primary-button" onClick={onAdd}><span aria-hidden="true">＋</span> Add project</button></div>
+        <div>
+          <p className="eyebrow">EXPERIENCE LIBRARY</p>
+          <h1>
+            Your work,
+            <br />
+            ready to use.
+          </h1>
+          <p>
+            Keep coursework and personal projects organized so ResumeGPT
+            <br className="desktop-break" /> can turn your experience into stronger resume bullets.
+          </p>
+        </div>
+        <div className="hero-actions">
+          <button className="secondary-button" onClick={onImport}>
+            Import from Canvas
+          </button>
+          <button className="primary-button" onClick={onAdd}>
+            <span aria-hidden="true">＋</span> Add project
+          </button>
+        </div>
       </div>
       <Notice message={notice} onDismiss={onDismissNotice} />
       <section className="surface-card library-card">
         <SectionHeading eyebrow="SAVED EXPERIENCE" title="Project library" />
-        <div className="library-count">{projects.length} {projects.length === 1 ? "project" : "projects"}</div>
+        <div className="library-count">
+          {projects.length} {projects.length === 1 ? "project" : "projects"}
+        </div>
         <div className="filter-bar">
-          <label className="search-field"><span aria-hidden="true" className="search-icon" /><input aria-label="Search projects or skills" onChange={(event) => onQueryChange(event.target.value)} placeholder="Search projects or skills" value={query} /></label>
-          <label className="filter-select"><span>COURSE</span><select aria-label="Filter by course" onChange={(event) => onCourseChange(event.target.value)} value={courseFilter}><option>All courses</option>{courses.map((course) => <option key={course}>{course}</option>)}</select></label>
-          <label className="filter-select"><span>SEMESTER</span><select aria-label="Filter by semester" onChange={(event) => onSemesterChange(event.target.value)} value={semesterFilter}><option>All semesters</option>{semesters.map((semester) => <option key={semester}>{semester}</option>)}</select></label>
-          <label className="filter-select"><span>SKILL</span><select aria-label="Filter by skill" onChange={(event) => onSkillChange(event.target.value)} value={skillFilter}><option>All skills</option>{skills.map((skill) => <option key={skill}>{skill}</option>)}</select></label>
+          <label className="search-field">
+            <span aria-hidden="true" className="search-icon" />
+            <input
+              aria-label="Search projects or skills"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search projects or skills"
+              value={query}
+            />
+          </label>
+          <label className="filter-select">
+            <span>COURSE</span>
+            <select
+              aria-label="Filter by course"
+              onChange={(event) => onCourseChange(event.target.value)}
+              value={courseFilter}
+            >
+              <option>All courses</option>
+              {courses.map((course) => (
+                <option key={course}>{course}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-select">
+            <span>SEMESTER</span>
+            <select
+              aria-label="Filter by semester"
+              onChange={(event) => onSemesterChange(event.target.value)}
+              value={semesterFilter}
+            >
+              <option>All semesters</option>
+              {semesters.map((semester) => (
+                <option key={semester}>{semester}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-select">
+            <span>SKILL</span>
+            <select
+              aria-label="Filter by skill"
+              onChange={(event) => onSkillChange(event.target.value)}
+              value={skillFilter}
+            >
+              <option>All skills</option>
+              {skills.map((skill) => (
+                <option key={skill}>{skill}</option>
+              ))}
+            </select>
+          </label>
         </div>
         {loading ? (
           <p className="muted-copy">Loading your projects…</p>
@@ -926,19 +1321,195 @@ function ProjectsPage({
           <div className="project-grid">
             {projects.map((project) => (
               <article className="project-card" key={project.id}>
-                <div className="project-meta"><span><i className="status-dot" />{project.source === "Canvas" ? "CANVAS SYNC" : "PERSONAL PROJECT"}</span><button aria-label={`Delete ${project.title}`} onClick={() => onDelete(project.id)}>Delete</button></div>
+                <div className="project-meta">
+                  <span>
+                    <i className="status-dot" />
+                    {project.source === "Canvas" ? "CANVAS SYNC" : "PERSONAL PROJECT"}
+                  </span>
+                  <button aria-label={`Delete ${project.title}`} onClick={() => onDelete(project.id)}>
+                    Delete
+                  </button>
+                </div>
                 <h3>{project.title}</h3>
-                <p className="project-course">{project.course} <span>·</span> {project.semester}</p>
+                <p className="project-course">
+                  {project.course} <span>·</span> {project.semester}
+                </p>
                 <p className="project-description">{project.description}</p>
-                <div className="tag-list">{project.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
+                <div className="tag-list">
+                  {project.skills.map((skill) => (
+                    <span className="tag" key={skill}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               </article>
             ))}
           </div>
         ) : (
-          <div className="empty-state"><span className="empty-icon">⌕</span><h3>No projects found</h3><p>Try changing your filters or add a new project to your library.</p><button className="secondary-button" onClick={() => { onQueryChange(""); onCourseChange("All courses"); onSemesterChange("All semesters"); onSkillChange("All skills"); }}>Clear filters</button></div>
+          <div className="empty-state">
+            <span className="empty-icon">⌕</span>
+            <h3>No projects found</h3>
+            <p>Try changing your filters or add a new project to your library.</p>
+            <button
+              className="secondary-button"
+              onClick={() => {
+                onQueryChange("");
+                onCourseChange("All courses");
+                onSemesterChange("All semesters");
+                onSkillChange("All skills");
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
         )}
       </section>
     </>
+  );
+}
+
+function CanvasPage({
+  flagged,
+  onToggleFlag,
+  onViewProjects,
+  onReturn,
+}: {
+  flagged: boolean;
+  onToggleFlag: () => void;
+  onViewProjects: () => void;
+  onReturn: () => void;
+}) {
+  const assignment = flagshipAssignment;
+  return (
+    <main className="canvas-demo">
+      <header className="canvas-topbar">
+        <button className="canvas-menu" aria-label="Open course menu">
+          ☰
+        </button>
+        <div className="canvas-crumbs">
+          <strong>{assignment.course} - 001</strong>
+          <span>›</span>
+          <strong>Assignments</strong>
+          <span>›</span>
+          <span>{assignment.title}</span>
+        </div>
+        <button className="canvas-student">Student View</button>
+      </header>
+      <div className="canvas-layout">
+        <nav className="canvas-rail" aria-label="Canvas global navigation">
+          <div className="canvas-flower" aria-hidden="true">
+            ✿
+          </div>
+          <button>
+            <span>♙</span>Account
+          </button>
+          <button>
+            <span>▦</span>Dashboard
+          </button>
+          <button className="rail-selected">
+            <span>◇</span>Courses
+          </button>
+          <button>
+            <span>▣</span>Calendar
+          </button>
+          <button>
+            <span>▱</span>Inbox
+          </button>
+          <button>
+            <span>ⓘ</span>Help
+          </button>
+        </nav>
+        <nav className="canvas-course-nav" aria-label="Course navigation">
+          {[
+            "Home",
+            "Announcements",
+            "Syllabus",
+            "Modules",
+            "Assignments",
+            "Discussions",
+            "Grades",
+            "People",
+            "Pages",
+            "Files",
+            "Quizzes",
+            "Collaborations",
+          ].map((item) => (
+            <button className={item === "Assignments" ? "course-selected" : ""} key={item}>
+              {item}
+            </button>
+          ))}
+        </nav>
+        <section className="canvas-assignment">
+          <div className="canvas-assignment-title">
+            <div>
+              <h1>{assignment.title}</h1>
+              <p>Due {assignment.dueDate}</p>
+            </div>
+            <span className="published-state">✓ &nbsp;Published</span>
+          </div>
+          <div className="canvas-details">
+            <span>
+              <strong>Points</strong> {assignment.points}
+            </span>
+            <span>
+              <strong>Submitting</strong> {assignment.submission.type}
+            </span>
+            <span>
+              <strong>Course</strong> {assignment.courseName}
+            </span>
+          </div>
+          <section className="assignment-copy">
+            <h2>Overview</h2>
+            <p>{assignment.description}</p>
+            <div className="learning-callout">
+              <strong>Skills this work can demonstrate</strong>
+              <span>{assignment.skills.join(" · ")}</span>
+            </div>
+            <h2>Your submission</h2>
+            <button className="starter-file">
+              <span className="file-icon">▯</span>
+              <span>
+                <strong>{assignment.submission.detail}</strong>
+                <small>
+                  {assignment.submission.type} · submitted {assignment.submission.submittedAt}
+                </small>
+              </span>
+            </button>
+          </section>
+          <button className="canvas-return" onClick={onReturn}>
+            ← Return to ResumeGPT
+          </button>
+        </section>
+        <aside className="canvas-submit">
+          <button>Submit Assignment</button>
+          <a href="#rubric">▫ &nbsp; View Rubric</a>
+          <a href="#submission">▫ &nbsp; Show By Type</a>
+          <hr />
+          <h2>Submission</h2>
+          <strong>Submitted</strong>
+          <p>{assignment.submission.submittedAt}</p>
+        </aside>
+      </div>
+      <aside className="extension-card" aria-label="ResumeGPT Canvas extension">
+        <div className="extension-heading">
+          <span className="brand-mark">R</span>
+          <span>
+            <strong>ResumeGPT</strong>
+            <small>Chrome extension test</small>
+          </span>
+        </div>
+        <p>Save this assignment as a project and use it when building your next resume.</p>
+        <button className={`flag-button ${flagged ? "flagged" : ""}`} onClick={onToggleFlag}>
+          {flagged ? "Flagged for ResumeGPT" : "Flag for ResumeGPT"}
+        </button>
+        {flagged && (
+          <div className="extension-saved">
+            This assignment is already in your project library.
+            <button onClick={onViewProjects}>View Projects</button>
+          </div>
+        )}
+      </aside>
+    </main>
   );
 }
 

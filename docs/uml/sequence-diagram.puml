@@ -1,58 +1,69 @@
 @startuml
-' ResumeGPT — user story: "user creates a project and it persists"
+' ResumeGPT — user story: "save a resume generated from coursework"
+' Mirrors src/App.tsx -> server/index.ts -> src/server/resumes.ts -> Prisma
 skinparam shadowing false
 skinparam sequenceMessageAlign center
 autonumber
 
-title Create project and persist it
+title Save a resume with source-traceable bullets
 
-actor User as U
-participant "React UI\n(Projects view + modal)" as UI
-participant "API server\n(POST /api/projects)" as API
-participant "Prisma\ndata-access" as ORM
-database "SQLite\n(dev.db)" as SQL
+actor Student as U
+participant "Resume UI\n(React, src/App.tsx)" as UI
+participant "Express API\n(POST /api/resumes)" as API
+participant "resumes.ts\n(validation + bullets)" as SVC
+participant "Prisma\n(data access)" as ORM
+database "SQLite\n(prisma/dev.db)" as SQL
 
-U -> UI : open "Add project" modal
-U -> UI : fill title, description,\ncourse, skills; submit
+U -> UI : enter target role, choose skills
+U -> UI : click "Generate resume"
 activate UI
+UI -> UI : buildDraft(projects, skills, role)\nrank projects, draft one bullet each
+UI --> U : review dialog with\nsource badge per bullet
+U -> UI : edit bullet text, then "Approve & save"
 
-UI -> UI : validate title & description non-empty
+UI -> API : POST /api/resumes\nx-student-id: 7\n{ title, bullets: [{id, text, source, projectId}] }
+activate API
 
-alt validation fails
-  UI --> U : inline error\n"Add a project title and description to continue."
-  note right of UI : no HTTP request is sent;\nentered values stay in the form
-else input is valid
-  UI -> API : POST /api/projects\n{title, course, semester, description,\nskills, source}
-  activate API
+API -> API : currentStudent(req)
+alt header missing or unknown (401)
+  API --> UI : 401 { error }
+  UI --> U : "Sign in with a student profile to continue."
+else session valid
+  API -> SVC : createResume({ userId, title, bullets })
+  activate SVC
 
-  API -> API : validate payload, parse\nskills CSV into array
+  SVC -> SVC : parseBullets()\nreject non-array, empty text
 
-  alt payload rejected (400)
-    API --> UI : 400 {error}
-    UI --> U : show error, keep form open
-  else payload accepted
-    API -> ORM : project.create({ data: { ..., userId } })
+  alt invalid input (400)
+    SVC --> API : ValidationError
+    API --> UI : 400 { error }
+    UI --> U : inline error; dialog stays open
+  else valid
+    SVC -> ORM : resume.create({ data })
     activate ORM
-    ORM -> SQL : INSERT INTO Project
+    ORM -> SQL : INSERT INTO Resume\n(userId, title, date, bullets)
     activate SQL
-    SQL --> ORM : new row (id, createdAt)
+    SQL --> ORM : new row (id, createdAt, updatedAt)
     deactivate SQL
-    ORM --> API : Project record
+    ORM --> SVC : Resume record
     deactivate ORM
-    API --> UI : 201 { project }
-    UI -> UI : prepend project to list
-    UI --> U : close modal, show\n"Project added to your library."
+    SVC --> API : { id, title, date, bullets }
+    API --> UI : 201 { resume }
+    UI -> UI : prepend to resume library
+    UI --> U : "Resume saved to your library."
   end
 
-  deactivate API
+  deactivate SVC
 end
 
+deactivate API
 deactivate UI
 
-note over API, SQL
-  Target architecture. The current build still
-  writes to localStorage; the API + Prisma layers
-  land with issue #8.
+note over ORM, SQL
+  bullets is JSON text. The source label inside
+  each bullet keeps the resume claim traceable
+  to its course assignment after the row is
+  reloaded, including after a server restart.
 end note
 
 @enduml

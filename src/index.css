@@ -538,3 +538,122 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* --- student profiles, Canvas import, resume review ---------------------- */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.auth-form .field-row > label { margin: 2px 0 0; color: #21483a; font-size: 11px; font-weight: 800; }
+.auth-form .field-row > input {
+  width: 100%;
+  height: 47px;
+  margin: 0 0 9px;
+  border: 1px solid #dce2dd;
+  border-radius: 11px;
+  padding: 0 14px;
+  background: white;
+  color: #173f32;
+  font-size: 12px;
+}
+.auth-form select {
+  width: 100%;
+  height: 47px;
+  margin: 0 0 9px;
+  border: 1px solid #dce2dd;
+  border-radius: 11px;
+  padding: 0 12px;
+  background: white;
+  color: #173f32;
+  font-size: 12px;
+}
+.demo-button { width: 100%; min-height: 44px; margin-top: 10px; font-size: 11px; }
+
+.dialog.wide { width: min(100%, 620px); }
+.resume-library { margin-top: 22px; }
+.resume-list > .resume-row .row-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #14583e;
+  font-size: 9px;
+  font-weight: 800;
+}
+.resume-list > .resume-row .row-action.destructive { color: #a12e28; }
+.resume-list > .resume-row .row-action:hover { text-decoration: underline; }
+
+.course-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.course-tab {
+  border: 1px solid #e1e6e2;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: #fff;
+  color: #4a6357;
+  font-size: 9px;
+  font-weight: 800;
+}
+.course-tab.selected { border-color: #00583e; background: #00583e; color: #fff; }
+.course-caption { margin: 0 0 14px; color: #718079; font-size: 9px; font-weight: 700; }
+.assignment-list {
+  display: grid;
+  max-height: 300px;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.assignment-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e6eae5;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.assignment-option.selected { border-color: #7ea691; background: #f4f9f5; }
+.assignment-option.imported { opacity: .62; cursor: default; }
+.assignment-option input { margin-top: 2px; accent-color: #00583e; }
+.assignment-body { display: grid; gap: 4px; }
+.assignment-body strong { color: #174638; font-size: 10px; font-weight: 800; }
+.assignment-body small { color: #718079; font-size: 8px; }
+.assignment-body .tag-list { margin-top: 3px; }
+.imported-tag { background: #f0eee2; color: #7a6f3e; }
+
+.bullet-editor { display: grid; gap: 10px; }
+.bullet-row {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #e6eae5;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fbfcfb;
+}
+.bullet-row textarea {
+  width: 100%;
+  border: 1px solid #e1e6e2;
+  border-radius: 9px;
+  padding: 10px 11px;
+  background: #fff;
+  color: #20483a;
+  font-size: 11px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.source-badge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #073d30;
+  color: #d9e6de;
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: .04em;
+}
+.bullet-remove {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #a12e28;
+  font-size: 8px;
+  font-weight: 800;
+}
+.bullet-remove:hover { text-decoration: underline; }

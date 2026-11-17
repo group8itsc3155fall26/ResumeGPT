@@ -1,7 +1,8 @@
 {
-  "name": "figma-make-app",
+  "name": "resumegpt",
   "private": true,
   "version": "1.0.0",
+  "description": "ResumeGPT turns Canvas coursework into resume-ready project descriptions and skills.",
   "type": "module",
   "scripts": {
     "dev": "vite",

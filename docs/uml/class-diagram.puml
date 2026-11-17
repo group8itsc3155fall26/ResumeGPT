@@ -1,5 +1,6 @@
 @startuml
 ' ResumeGPT data model — mirrors prisma/schema.prisma
+' (migration 20261114222745_student_profiles_and_resume_bullets)
 skinparam classAttributeIconSize 0
 skinparam shadowing false
 hide circle
@@ -8,48 +9,85 @@ hide empty members
 title ResumeGPT — Data Model
 
 class User {
-  +id : String <<PK>>
+  +id : Int <<PK>>
   +username : String <<unique>>
+  +name : String
+  +major : String
+  +college : String
+  +classStanding : ClassStanding
+  +graduationYear : Int <<nullable>>
   +createdAt : DateTime
 }
 
 class Project {
-  +id : String <<PK>>
+  +id : Int <<PK>>
   +title : String
   +course : String
   +semester : String
   +description : String
-  +skills : String
-  +source : Source
-  +userId : String <<FK>>
+  +skills : String <<JSON string[]>>
+  +highlight : String <<nullable>>
+  +source : ProjectSource
+  +userId : Int <<FK>>
+  +createdAt : DateTime
 }
 
 class Resume {
-  +id : String <<PK>>
+  +id : Int <<PK>>
   +title : String
   +date : String
-  +userId : String <<FK>>
+  +bullets : String <<JSON ResumeBullet[]>>
+  +userId : Int <<FK>>
+  +createdAt : DateTime
+  +updatedAt : DateTime
 }
 
-enum Source <<enumeration>> {
+class ResumeBullet <<value object>> {
+  +id : String
+  +text : String
+  +source : String
+  +projectId : Int <<nullable, soft reference>>
+}
+
+enum ProjectSource <<enumeration>> {
   Canvas
   Personal
 }
 
+enum ClassStanding <<enumeration>> {
+  Freshman
+  Sophomore
+  Junior
+  Senior
+}
+
 User "1" ||--o{ "0..*" Project : owns
 User "1" ||--o{ "0..*" Resume : owns
-Project "0..*" }o--|| "1" Source : classified as
+Resume "1" *-- "0..*" ResumeBullet : contains
+ResumeBullet "0..*" ..> "0..1" Project : evidence for
+Project "0..*" }o--|| "1" ProjectSource : classified as
+User "1" }o--|| "1" ClassStanding : has
 
 note right of Project::skills
   JSON-encoded string, e.g. ["React","SQL"].
-  Prisma SQLite has no scalar lists; parsed to
-  string[] at the API boundary. See
-  docs/ai-design-review.md.
+  SQLite has no scalar lists; parsed to
+  string[] at the API boundary.
+  See docs/ai-design-review.md.
 end note
 
-note bottom of User
-  Only id is fixed by the current schema task;
-  username/createdAt land with server-side auth.
+note right of Resume::bullets
+  JSON array of ResumeBullet. Stored inline
+  rather than in a Bullet table because a
+  bullet is owned by exactly one resume and
+  is never queried on its own.
+  See docs/ai-design-review.md.
+end note
+
+note bottom of ResumeBullet
+  source is the display attribution shown as
+  the resume badge ("ITSC 3155 — Team Sprint
+  Project"), so every claim traces back to the
+  coursework it came from.
 end note
 
 @enduml

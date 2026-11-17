@@ -1,19 +1,15 @@
-import { rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { db, ValidationError } from "../src/server/db";
 import { createProject, listProjects } from "../src/server/projects";
 
-const testDb = fileURLToPath(new URL("../prisma/test.db", import.meta.url));
 let userId: number;
 
 beforeAll(async () => {
-  userId = (await db.user.create({ data: { username: "vitest-user" } })).id;
+  userId = (await db.user.create({ data: { username: "vitest-user", name: "Vitest User" } })).id;
 });
 
 afterAll(async () => {
   await db.$disconnect();
-  rmSync(testDb, { force: true });
 });
 
 it("creates a project that can be read back", async () => {
@@ -24,6 +20,7 @@ it("creates a project that can be read back", async () => {
     semester: "Fall 2026",
     description: "Saved through the data-access layer.",
     skills: [" SQL ", ""],
+    highlight: "cutting report query time 40%",
   });
 
   expect(created).toMatchObject({
@@ -31,6 +28,7 @@ it("creates a project that can be read back", async () => {
     course: "ITSC 3160",
     semester: "Fall 2026",
     skills: ["SQL"],
+    highlight: "cutting report query time 40%",
     source: "Personal",
   });
   expect((await listProjects(userId)).map((project) => project.id)).toEqual([created.id]);

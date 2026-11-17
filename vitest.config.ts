@@ -5,5 +5,7 @@ export default defineConfig({
     // Throwaway SQLite file; the path is resolved next to prisma/schema.prisma.
     env: { DATABASE_URL: "file:./test.db" },
     globalSetup: "./tests/global-setup.ts",
+    // Every suite shares prisma/test.db, so files must not run concurrently.
+    fileParallelism: false,
   },
 });

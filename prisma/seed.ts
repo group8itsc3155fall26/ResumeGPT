@@ -1,36 +1,16 @@
 import { PrismaClient } from "@prisma/client";
+import { assignmentToProject, mockCanvasCourses } from "../src/data/canvasCatalog";
+import { generateBullet } from "../src/lib/resumeBullets";
 
 const db = new PrismaClient();
 
-// Sample rows copied from initialProjects / initialResumes in src/App.tsx.
-const projects = [
-  {
-    title: "Programming Assignment 4: REST API Client",
-    course: "ITSC 3155",
-    semester: "Fall 2026",
-    description:
-      "Built a command-line REST API client that validates responses, handles request failures, and presents weather data clearly.",
-    skills: ["API Integration", "JSON Processing", "Testing", "Error Handling"],
-    source: "Canvas",
-  },
-  {
-    title: "ITSC-3155 Web Application Project",
-    course: "ITSC 3155",
-    semester: "Fall 2026",
-    description:
-      "Designed and built a responsive web application with a student team, from early requirements through usability testing.",
-    skills: ["React", "TypeScript", "Teamwork"],
-    source: "Canvas",
-  },
-  {
-    title: "Database Management System",
-    course: "ITSC 3160",
-    semester: "Fall 2026",
-    description:
-      "Created a normalized relational database and documented queries for a semester-long data management project.",
-    skills: ["SQL", "Data Modeling", "Documentation"],
-    source: "Canvas",
-  },
+const softwareEngineering = mockCanvasCourses[0];
+const databases = mockCanvasCourses[2];
+
+// Sample rows mirror the mock Canvas catalog so imports and seed data agree.
+const seededProjects = [
+  ...softwareEngineering.assignments.slice(0, 2).map(assignmentToProject),
+  assignmentToProject(databases.assignments[0]),
   {
     title: "Personal Portfolio Website",
     course: "Personal",
@@ -38,38 +18,71 @@ const projects = [
     description:
       "Built a personal portfolio to showcase selected coursework, projects, and technical skills.",
     skills: ["React", "CSS", "Accessibility"],
-    source: "Personal",
+    highlight: null,
+    source: "Personal" as const,
   },
 ];
 
-const resumes = [
-  { title: "Software Engineer Resume v2", date: "October 4, 2026" },
-  { title: "Full-Stack Developer Resume", date: "September 28, 2026" },
-  { title: "Data Structures & Algorithms Resume", date: "September 15, 2026" },
-];
+const demoStudent = {
+  name: "John Bob",
+  major: "Computer Science",
+  college: "UNC Charlotte",
+  classStanding: "Junior",
+  graduationYear: 2027,
+};
 
 async function main() {
   const user = await db.user.upsert({
     where: { username: "demo" },
-    update: {},
-    create: { username: "demo" },
+    update: demoStudent,
+    create: { username: "demo", ...demoStudent },
   });
 
   // Re-running the seed replaces the demo user's rows instead of duplicating them.
   await db.project.deleteMany({ where: { userId: user.id } });
   await db.resume.deleteMany({ where: { userId: user.id } });
 
-  await db.project.createMany({
-    data: projects.map((project) => ({
-      ...project,
-      skills: JSON.stringify(project.skills),
-      userId: user.id,
-    })),
+  const projects = [];
+  for (const project of seededProjects) {
+    projects.push(
+      await db.project.create({
+        data: { ...project, skills: JSON.stringify(project.skills), userId: user.id },
+      }),
+    );
+  }
+
+  const toDomain = (row: (typeof projects)[number]) => ({
+    id: row.id,
+    title: row.title,
+    course: row.course,
+    semester: row.semester,
+    description: row.description,
+    skills: JSON.parse(row.skills) as string[],
+    highlight: row.highlight,
+    source: row.source === "Canvas" ? ("Canvas" as const) : ("Personal" as const),
   });
-  await db.resume.createMany({ data: resumes.map((resume) => ({ ...resume, userId: user.id })) });
+
+  const resumes = [
+    {
+      title: "Software Engineering Internship Resume",
+      date: "November 12, 2026",
+      bullets: projects.slice(0, 3).map((row) => generateBullet(toDomain(row))),
+    },
+    {
+      title: "Full-Stack Developer Resume",
+      date: "October 28, 2026",
+      bullets: projects.slice(2).map((row) => generateBullet(toDomain(row))),
+    },
+  ];
+
+  for (const resume of resumes) {
+    await db.resume.create({
+      data: { ...resume, bullets: JSON.stringify(resume.bullets), userId: user.id },
+    });
+  }
 
   console.log(
-    `Seeded user "${user.username}" (id ${user.id}): ${projects.length} projects, ${resumes.length} resumes.`,
+    `Seeded student "${user.username}" (id ${user.id}): ${projects.length} projects, ${resumes.length} resumes.`,
   );
 }
 

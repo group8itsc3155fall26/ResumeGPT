@@ -7,6 +7,8 @@ export type NewProject = {
   semester: string;
   description: string;
   skills: string[];
+  /** One-line outcome used by the resume bullet generator; optional for hand-added projects. */
+  highlight?: string | null;
   source?: ProjectSource;
 };
 
@@ -23,6 +25,7 @@ export async function createProject(input: NewProject): Promise<Project> {
   const skills = (Array.isArray(input.skills) ? input.skills : [])
     .map((skill) => (typeof skill === "string" ? skill.trim() : ""))
     .filter(Boolean);
+  const highlight = typeof input.highlight === "string" ? input.highlight.trim() : "";
 
   const row = await db.project.create({
     data: {
@@ -32,6 +35,7 @@ export async function createProject(input: NewProject): Promise<Project> {
       semester: requireText(input.semester, "Project semester"),
       description: requireText(input.description, "Project description"),
       skills: JSON.stringify(skills),
+      highlight: highlight || null,
       source,
     },
   });

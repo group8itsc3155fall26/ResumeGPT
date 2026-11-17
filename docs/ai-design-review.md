@@ -76,3 +76,80 @@ server-side.`
 
 Not covered: resume sections and the Canvas import payload are still modeled as
 strings, and were not reviewed here.
+
+---
+
+# AI design review — resume bullets
+
+Scope: where generated resume bullets live after the user approves them.
+
+## The AI-proposed design
+
+Asked to model a resume with bullets, the generated schema introduced a full entity:
+
+```prisma
+model Resume {
+  id      Int      @id @default(autoincrement())
+  title   String
+  bullets Bullet[]
+}
+
+model Bullet {
+  id        Int    @id @default(autoincrement())
+  text      String
+  source    String
+  order     Int
+  projectId Int?
+  resumeId  Int
+}
+```
+
+## Review
+
+A bullet is generated once, edited in place, and read only as part of the resume it
+belongs to. Nothing queries bullets across resumes, filters by them, or shares one
+bullet between two resumes. The `order` column exists only because a relational
+list needs one.
+
+The upsert path also got worse: saving an edited resume becomes delete-all-plus-
+reinsert or an N-row diff inside a transaction, where the UI simply replaces an
+array it already holds in state.
+
+## Correction
+
+`Resume.bullets` is a JSON array stored inline:
+
+```prisma
+bullets String @default("[]") // JSON ResumeBullet[]
+```
+
+Each entry is `{ id, text, source, projectId }`, validated by `parseBullets()` in
+`src/server/resumes.ts` and parsed on read in `toResume()`. The `source` label is
+kept inside the bullet rather than joined at read time, so the attribution badge
+survives independently of the project row.
+
+| | JSON array (chosen) | Bullet table (rejected) |
+|---|---|---|
+| Save an edit | 1 `UPDATE` | delete + re-insert, or N-row diff |
+| Read a resume | 1 row, no join | join + nested include |
+| Reorder | rewrite the array | update `order` on N rows |
+| Query bullets across resumes | not possible in SQL | indexed |
+| Per-bullet foreign key to `Project` | soft `projectId`, no constraint | enforced |
+
+The rejected capabilities are unused: the UI renders bullets only inside the resume
+dialog, and a bullet outliving its source project must render an attribution string
+anyway rather than fail a foreign key.
+
+`shortcut: bullets are opaque JSON — no cross-resume queries and no FK to Project;
+normalize into a Bullet table when bullet analytics or enforced provenance is needed.`
+
+## What the review changed
+
+- Dropped the `Bullet` model; kept `Resume.bullets` as JSON text.
+- Moved validation into `parseBullets()` so untrusted browser payloads cannot store
+  malformed bullets.
+- Documented the encoding in the class diagram so it is not mistaken for a display
+  string.
+
+Not covered: the Canvas import payload is still a TypeScript catalog rather than a
+persisted `Assignment` entity, because Canvas remains mocked this sprint.
