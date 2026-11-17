@@ -88,7 +88,7 @@ tests/          Vitest suites (shared prisma/test.db, built once in global-setup
 
 ## Rules
 
-- Never commit `.env`, `*.db`, or keys — `.gitignore` enforces this.
+- Never commit `.env`, `*.db`, or keys (including `GEMINI_API_KEY`); `.gitignore` enforces this.
 - Schema changes go through `npx prisma migrate dev --name <change>` so the
   committed migration folder stays the single source of truth for everyone.
 - The session header is a prototype convenience, not authentication.

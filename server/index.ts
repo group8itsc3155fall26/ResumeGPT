@@ -93,6 +93,12 @@ app.patch("/api/resumes/:id", async (req, res) => {
   res.json(updated);
 });
 
+app.post("/api/resumes/generate", async (req, res) => {
+  res.status(201).json(
+    await generateResume({ userId: DEMO_USER_ID, prompt: req.body?.prompt, skills: req.body?.skills }),
+  );
+});
+
 app.delete("/api/resumes/:id", async (req, res) => {
   const student = await currentStudent(req);
   const deleted = await deleteResume(student.id, idFrom(req.params.id));
