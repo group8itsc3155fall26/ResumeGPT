@@ -8,6 +8,7 @@ import {
   demoLogin,
   editResume,
   fetchStudent,
+  generateResumeWithAi,
   listProjects,
   listResumes,
   loginStudent,
@@ -29,30 +30,6 @@ import {
 import { buildDraft } from "./lib/resumeBullets";
 
 type Section = "Profile" | "Resume" | "Projects" | "Canvas";
-
-/** Collected when a student creates an account; not collected on plain login. */
-type StudentProfile = { fullName: string; major: string; graduationYear: string };
-
-const PROFILE_KEY = "resumegptProfile";
-
-function loadProfile(): StudentProfile | null {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(PROFILE_KEY) ?? "null") as Partial<StudentProfile> | null;
-    return value?.fullName && value.major && value.graduationYear
-      ? { fullName: value.fullName, major: value.major, graduationYear: value.graduationYear }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-/** "John Bob" -> "JB" (first and last word). */
-const initialsOf = (name: string) => {
-  const words = name.trim().split(/\s+/);
-  return [words[0], words.length > 1 ? words[words.length - 1] : ""]
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-};
 type AuthMode = "login" | "create";
 type Modal = "project" | "canvas" | null;
 type Draft = {
@@ -92,6 +69,7 @@ function App() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [draftError, setDraftError] = useState("");
   const [savingDraft, setSavingDraft] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const [query, setQuery] = useState("");
   const [courseFilter, setCourseFilter] = useState("All courses");
@@ -156,15 +134,6 @@ function App() {
     return unique.length ? unique.slice(0, 12) : DEFAULT_SKILLS;
   }, [projects]);
 
-  // Skills the student can pick: every skill on their projects, once each (case-insensitive).
-  const skillOptions = useMemo(() => {
-    const byKey = new Map<string, string>();
-    for (const skill of projects.flatMap((project) => project.skills)) {
-      if (!byKey.has(skill.toLowerCase())) byKey.set(skill.toLowerCase(), skill);
-    }
-    return byKey.size ? [...byKey.values()] : defaultSkillOptions;
-  }, [projects]);
-
   const filteredProjects = useMemo(
     () =>
       projects.filter((project) => {
@@ -219,10 +188,23 @@ function App() {
       setNotice("Choose at least one skill to emphasize.");
       return;
     }
-    const generated = buildDraft(projects, selectedSkills, roleDescription);
-    setDraft({ mode: "create", id: null, ...generated });
+
+    setGenerating(true);
     setDraftError("");
     setNotice("");
+    try {
+      // Gemini drafts and persists the resume server-side, then we open it for review.
+      const generated = await generateResumeWithAi(roleDescription.trim(), selectedSkills);
+      setDraft({ mode: "edit", id: generated.id, title: generated.title, bullets: generated.bullets });
+      setNotice("Gemini drafted this resume from your coursework — review each bullet before keeping it.");
+    } catch (error) {
+      // No key, rate limit, or model outage: draft offline so the demo still works.
+      const generated = buildDraft(projects, selectedSkills, roleDescription);
+      setDraft({ mode: "create", id: null, ...generated });
+      setNotice(`Gemini is unavailable (${(error as Error).message}) — drafted offline instead.`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const openResume = (resume: Resume) => {
@@ -468,10 +450,6 @@ function App() {
             projects={projects}
             loading={loadingWorkspace}
             onNavigate={setSection}
-            onOpenResume={(id) => {
-              setActiveResumeId(id);
-              setSection("Resume");
-            }}
             notice={notice}
             onDismissNotice={() => setNotice("")}
           />
@@ -482,11 +460,6 @@ function App() {
             availableSkills={availableSkills}
             selectedSkills={selectedSkills}
             generating={generating}
-            activeResume={resumes.find((resume) => resume.id === activeResumeId) ?? null}
-            onNewDraft={() => {
-              setRoleDescription("");
-              setActiveResumeId(null);
-            }}
             onToggleSkill={toggleSkill}
             roleDescription={roleDescription}
             onRoleChange={setRoleDescription}
@@ -837,34 +810,6 @@ function AuthPage({
               : "Use the username your profile was created with."}
           </p>
           <form className="auth-form" onSubmit={submit} noValidate>
-            {isCreate && (
-              <>
-                <label htmlFor="auth-full-name">Full name</label>
-                <input
-                  autoComplete="name"
-                  id="auth-full-name"
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Enter your full name"
-                  value={fullName}
-                />
-                <label htmlFor="auth-major">Major</label>
-                <input
-                  id="auth-major"
-                  onChange={(event) => setMajor(event.target.value)}
-                  placeholder="e.g. Computer Science"
-                  value={major}
-                />
-                <label htmlFor="auth-graduation-year">Graduation year</label>
-                <input
-                  id="auth-graduation-year"
-                  inputMode="numeric"
-                  maxLength={4}
-                  onChange={(event) => setGraduationYear(event.target.value.replace(/\D/g, ""))}
-                  placeholder="e.g. 2027"
-                  value={graduationYear}
-                />
-              </>
-            )}
             <label htmlFor="auth-username">Username</label>
             <input
               autoComplete="username"
@@ -1088,6 +1033,7 @@ function ProfilePage({
 function ResumePage({
   availableSkills,
   selectedSkills,
+  generating,
   onToggleSkill,
   roleDescription,
   onRoleChange,
@@ -1101,6 +1047,7 @@ function ResumePage({
 }: {
   availableSkills: string[];
   selectedSkills: string[];
+  generating: boolean;
   onToggleSkill: (skill: string) => void;
   roleDescription: string;
   onRoleChange: (value: string) => void;
@@ -1198,8 +1145,8 @@ function ResumePage({
             />
             <div className="composer-footer">
               <span>{selectedSkills.length} skills selected</span>
-              <button className="primary-button" type="submit">
-                Generate resume <span aria-hidden="true">→</span>
+              <button className="primary-button" disabled={generating} type="submit">
+                {generating ? "Drafting…" : "Generate resume"} <span aria-hidden="true">→</span>
               </button>
             </div>
           </form>
@@ -1305,12 +1252,7 @@ function ProjectsPage({
 }) {
   const courses = [...new Set(allProjects.map((project) => project.course))];
   const semesters = [...new Set(allProjects.map((project) => project.semester))];
-  // One dropdown entry per skill, ignoring case (first spelling seen wins).
-  const skillsByKey = new Map<string, string>();
-  for (const skill of allProjects.flatMap((project) => project.skills)) {
-    if (!skillsByKey.has(skill.toLowerCase())) skillsByKey.set(skill.toLowerCase(), skill);
-  }
-  const skills = [...skillsByKey.values()];
+  const skills = [...new Set(allProjects.flatMap((project) => project.skills))];
   return (
     <>
       <div className="projects-hero">

@@ -78,6 +78,19 @@ export function toProject(row: ProjectRow): Project {
   };
 }
 
+/** Structured sections returned by the Gemini resume drafter. */
+export type ResumeContent = {
+  targetRole: string;
+  skills: string[];
+  projects: {
+    projectId: number;
+    title: string;
+    course: string;
+    semester: string;
+    bullets: string[];
+  }[];
+};
+
 /** One resume claim plus the coursework it was generated from. */
 export type ResumeBullet = {
   id: string;
@@ -92,6 +105,7 @@ export type Resume = {
   title: string;
   date: string;
   bullets: ResumeBullet[];
+  content: ResumeContent | null;
 };
 
 /** Trimmed, non-empty string or throw — every text field goes through here. */

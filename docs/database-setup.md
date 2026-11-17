@@ -92,11 +92,13 @@ No credential has ever been committed to this repository, so no rotation is requ
 | Migration | Change |
 | --------- | ------ |
 | `20261114164547_init` | `User`, `Project`, `Resume` |
-| `20261114222745_student_profiles_and_resume_bullets` | student profile fields, `Project.highlight`, `Resume.bullets` + `updatedAt` |
+| `20261115230327_add_resume_content` | `Resume.content` (JSON from the Gemini drafter) |
+| `20261116090000_student_profiles_and_traceable_bullets` | student profile fields, `Project.highlight`, `Resume.bullets` + `updatedAt` |
 
-The second migration rebuilds `User` and `Resume` and copies existing rows, so a
-teammate whose `dev.db` already has data upgrades without resetting it. Pre-existing
-users get an empty `name`; `prisma/seed.ts` refreshes the demo profile.
+The third migration is purely additive (`ALTER TABLE ... ADD COLUMN` with defaults),
+so it applies cleanly to an existing `dev.db` without resetting it and without
+dropping the AI drafts stored in `Resume.content`. Pre-existing users get a default
+profile (`name = ''`); `prisma/seed.ts` refreshes the demo profile.
 
 ## Team verification table
 

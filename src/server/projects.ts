@@ -44,9 +44,7 @@ export async function createProject(input: NewProject): Promise<Project> {
   if (source !== "Canvas" && source !== "Personal") {
     throw new ValidationError(`Project source must be "Canvas" or "Personal".`);
   }
-  const skills = (Array.isArray(input.skills) ? input.skills : [])
-    .map((skill) => (typeof skill === "string" ? skill.trim() : ""))
-    .filter(Boolean);
+  const skills = await normalizeSkills(input.userId, input.skills);
   const highlight = typeof input.highlight === "string" ? input.highlight.trim() : "";
 
   const row = await db.project.create({

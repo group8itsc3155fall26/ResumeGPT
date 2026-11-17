@@ -21,11 +21,25 @@ export type ResumeBullet = {
   projectId: number | null;
 };
 
+/** Sections returned by the Gemini drafter; null for hand-built resumes. */
+export type ResumeContent = {
+  targetRole: string;
+  skills: string[];
+  projects: {
+    projectId: number;
+    title: string;
+    course: string;
+    semester: string;
+    bullets: string[];
+  }[];
+};
+
 export type Resume = {
   id: number;
   title: string;
   date: string;
   bullets: ResumeBullet[];
+  content: ResumeContent | null;
 };
 
 export const CLASS_STANDINGS = ["Freshman", "Sophomore", "Junior", "Senior"] as const;
@@ -102,5 +116,9 @@ export const addResume = (input: { title: string; bullets: ResumeBullet[] }) =>
 
 export const editResume = (id: number, input: { title: string; bullets: ResumeBullet[] }) =>
   request<Resume>(`/api/resumes/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+
+/** Gemini drafts and persists the resume server-side; the key never reaches the browser. */
+export const generateResumeWithAi = (prompt: string, skills: string[]) =>
+  request<Resume>("/api/resumes/generate", { method: "POST", body: JSON.stringify({ prompt, skills }) });
 
 export const removeResume = (id: number) => request<null>(`/api/resumes/${id}`, { method: "DELETE" });

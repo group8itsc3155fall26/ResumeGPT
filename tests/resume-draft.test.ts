@@ -9,6 +9,7 @@ const project = (id: number, title: string, skills: string[]): Project => ({
   semester: "Fall 2026",
   description: `${title} description.`,
   skills,
+  highlight: null,
   source: "Personal",
 });
 

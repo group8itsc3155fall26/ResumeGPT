@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
+import { existsSync } from "node:fs";
 import {
   ConflictError,
   NotFoundError,
@@ -7,8 +8,20 @@ import {
   type Student,
 } from "../src/server/db";
 import { createProject, deleteProject, listProjects } from "../src/server/projects";
-import { createResume, deleteResume, listResumes, updateResume } from "../src/server/resumes";
+import { AiError } from "../src/server/resumeDraft";
+import {
+  createResume,
+  deleteResume,
+  generateResume,
+  listResumes,
+  updateResume,
+} from "../src/server/resumes";
 import { createStudent, ensureDemoStudent, findStudentByUsername, getStudent } from "../src/server/users";
+
+// Load secrets (GEMINI_API_KEY) and settings from the git-ignored .env file.
+// Read at request time, so this runs before any key is needed.
+const loadEnvFile = Reflect.get(process, "loadEnvFile") as ((path: string) => void) | undefined;
+if (existsSync(".env") && loadEnvFile) loadEnvFile.call(process, ".env");
 
 const app = express();
 app.use(express.json());
@@ -83,6 +96,14 @@ app.post("/api/resumes", async (req, res) => {
   res.status(201).json(await createResume({ ...req.body, userId: student.id }));
 });
 
+// Gemini draft; throws AiError (502/503) when the key is missing or the model fails.
+app.post("/api/resumes/generate", async (req, res) => {
+  const student = await currentStudent(req);
+  res.status(201).json(
+    await generateResume({ userId: student.id, prompt: req.body?.prompt, skills: req.body?.skills }),
+  );
+});
+
 app.patch("/api/resumes/:id", async (req, res) => {
   const student = await currentStudent(req);
   const updated = await updateResume(student.id, idFrom(req.params.id), req.body ?? {});
@@ -93,12 +114,6 @@ app.patch("/api/resumes/:id", async (req, res) => {
   res.json(updated);
 });
 
-app.post("/api/resumes/generate", async (req, res) => {
-  res.status(201).json(
-    await generateResume({ userId: DEMO_USER_ID, prompt: req.body?.prompt, skills: req.body?.skills }),
-  );
-});
-
 app.delete("/api/resumes/:id", async (req, res) => {
   const student = await currentStudent(req);
   const deleted = await deleteResume(student.id, idFrom(req.params.id));
@@ -107,6 +122,10 @@ app.delete("/api/resumes/:id", async (req, res) => {
 
 // Express 5 forwards async rejections here, so routes need no try/catch.
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof AiError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
   if (error instanceof UnauthorizedError) {
     res.status(401).json({ error: error.message });
     return;

@@ -1,0 +1,13 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "name" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "User" ADD COLUMN "major" TEXT NOT NULL DEFAULT 'Computer Science';
+ALTER TABLE "User" ADD COLUMN "college" TEXT NOT NULL DEFAULT 'UNC Charlotte';
+ALTER TABLE "User" ADD COLUMN "classStanding" TEXT NOT NULL DEFAULT 'Freshman';
+ALTER TABLE "User" ADD COLUMN "graduationYear" INTEGER;
+
+-- AlterTable
+ALTER TABLE "Project" ADD COLUMN "highlight" TEXT;
+
+-- AlterTable
+ALTER TABLE "Resume" ADD COLUMN "bullets" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "Resume" ADD COLUMN "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;

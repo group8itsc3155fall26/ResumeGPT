@@ -54,6 +54,9 @@ model Resume {
   // JSON-encoded ResumeBullet[]: { id, text, source, projectId }.
   // Each bullet keeps its course attribution so every claim stays traceable.
   bullets   String   @default("[]")
+  // JSON-encoded ResumeContent from the Gemini draft (skills + projects sections);
+  // null for resumes that were not AI-generated.
+  content   String?
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

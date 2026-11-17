@@ -1,16 +1,32 @@
 import { randomUUID } from "node:crypto";
-import { db, requireText, ValidationError, type Resume, type ResumeBullet } from "./db";
+import {
+  db,
+  requireText,
+  ValidationError,
+  type Resume,
+  type ResumeBullet,
+  type ResumeContent,
+} from "./db";
+import { listProjects } from "./projects";
+import { draftResume, selectProjects } from "./resumeDraft";
 
 export type NewResume = {
   userId: number;
   title: string;
   date?: string;
   bullets?: unknown;
+  content?: ResumeContent | null;
 };
 
 export type ResumeUpdate = {
   title?: unknown;
   bullets?: unknown;
+};
+
+export type ResumeRequest = {
+  userId: number;
+  prompt?: unknown;
+  skills?: unknown;
 };
 
 const formatToday = () =>
@@ -44,7 +60,22 @@ function parseBullets(value: unknown): ResumeBullet[] {
   });
 }
 
-function toResume(row: { id: number; title: string; date: string; bullets: string }): Resume {
+function parseContent(value: string | null): ResumeContent | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as ResumeContent;
+  } catch {
+    return null;
+  }
+}
+
+function toResume(row: {
+  id: number;
+  title: string;
+  date: string;
+  bullets: string;
+  content: string | null;
+}): Resume {
   let bullets: ResumeBullet[] = [];
   try {
     const parsed: unknown = JSON.parse(row.bullets);
@@ -53,7 +84,13 @@ function toResume(row: { id: number; title: string; date: string; bullets: strin
     // A malformed row should not break the whole library; treat it as empty.
     bullets = [];
   }
-  return { id: row.id, title: row.title, date: row.date, bullets };
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date,
+    bullets,
+    content: parseContent(row.content),
+  };
 }
 
 export async function listResumes(userId: number): Promise<Resume[]> {
@@ -68,9 +105,46 @@ export async function createResume(input: NewResume): Promise<Resume> {
       title: requireText(input.title, "Resume title"),
       date: typeof input.date === "string" && input.date.trim() ? input.date.trim() : formatToday(),
       bullets: JSON.stringify(parseBullets(input.bullets)),
+      content: input.content ? JSON.stringify(input.content) : null,
     },
   });
   return toResume(row);
+}
+
+/** Turn a Gemini draft into the same traceable bullet shape the UI edits and stores. */
+function bulletsFromContent(content: ResumeContent): ResumeBullet[] {
+  return content.projects.flatMap((project) =>
+    project.bullets.map((text) => ({
+      id: randomUUID(),
+      text: text.trim(),
+      source: `${project.course} — ${project.title}`,
+      projectId: project.projectId,
+    })),
+  );
+}
+
+/**
+ * Draft a resume from the student's target role and selected skills with Gemini,
+ * then persist it. The AI sections are kept in `content`; the editable copy is
+ * flattened into `bullets` so the review dialog and attribution badges are identical
+ * to the offline generator.
+ */
+export async function generateResume(input: ResumeRequest): Promise<Resume> {
+  const prompt = requireText(input.prompt, "Role description");
+  if (prompt.length > 2000) throw new ValidationError("Keep the role description under 2,000 characters.");
+
+  const skills = (Array.isArray(input.skills) ? input.skills : [])
+    .filter((skill): skill is string => typeof skill === "string" && Boolean(skill.trim()))
+    .map((skill) => skill.trim());
+  if (!skills.length) throw new ValidationError("Choose at least one skill to emphasize.");
+
+  const projects = selectProjects(await listProjects(input.userId), skills);
+  if (!projects.length) {
+    throw new ValidationError("None of your saved projects match those skills yet. Import coursework first.");
+  }
+
+  const { title, content } = await draftResume(prompt, skills, projects);
+  return createResume({ userId: input.userId, title, content, bullets: bulletsFromContent(content) });
 }
 
 /** Scoped by userId; returns null when the resume belongs to someone else. */
