@@ -1,4 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import Walkthrough from "./Walkthrough";
 
 type Project = {
   id: number;
@@ -170,6 +172,29 @@ function App() {
   const [projectSkills, setProjectSkills] = useState("");
   const [projectError, setProjectError] = useState("");
   const [notice, setNotice] = useState("");
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+  const tourButtonSlot = useRef<HTMLButtonElement>(null);
+  const [tourButtonRect, setTourButtonRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (username && !authMode && !window.localStorage.getItem("hasSeenWalkthrough")) {
+      setWalkthroughOpen(true);
+    }
+  }, [username, authMode]);
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const rect = tourButtonSlot.current?.getBoundingClientRect();
+      if (rect) setTourButtonRect(rect);
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [section, authMode]);
 
   // Skills the student can pick: every skill on their projects, once each (case-insensitive).
   const skillOptions = useMemo(() => {
@@ -388,6 +413,7 @@ function App() {
             <button
               aria-current={section === item ? "page" : undefined}
               className={`nav-item ${section === item ? "active" : ""}`}
+              id={item === "Projects" ? "projects-nav" : item === "Resume" ? "resume-nav" : undefined}
               key={item}
               onClick={() => {
                 setSection(item);
@@ -400,6 +426,16 @@ function App() {
         </nav>
         <div className="top-actions">
           <button className="extension-badge" onClick={() => setSection("Canvas")}>Test-Canvas-Extension</button>
+          <button
+            className="tour-launch tour-launch-slot"
+            aria-hidden="true"
+            ref={tourButtonSlot}
+            style={{ visibility: "hidden" }}
+            tabIndex={-1}
+            type="button"
+          >
+            Take the tour
+          </button>
           <button className="logout-button" onClick={logout}>Log out</button>
         </div>
       </header>
@@ -527,6 +563,31 @@ function App() {
           </section>
         </div>
       )}
+      <Walkthrough
+        open={walkthroughOpen}
+        onClose={() => setWalkthroughOpen(false)}
+        onSectionChange={setSection}
+      />
+      {tourButtonRect &&
+        createPortal(
+          <button
+            className="tour-launch tour-launch-portal"
+            onClick={() => {
+              setSection("Profile");
+              setWalkthroughOpen(true);
+            }}
+            style={{
+              left: tourButtonRect.left,
+              top: tourButtonRect.top,
+              width: tourButtonRect.width,
+              height: tourButtonRect.height,
+            }}
+            type="button"
+          >
+            Take the tour
+          </button>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -888,12 +949,15 @@ function ProfilePage({
   notice: string;
   onDismissNotice: () => void;
 }) {
+  const displayName = profile?.fullName ?? username;
+  const greetingName = profile?.fullName.trim().split(/\s+/)[0] || username;
+
   return (
     <>
       <div className="profile-hero">
         <div>
           <Eyebrow>STUDENT WORKSPACE</Eyebrow>
-          <h1>Welcome back,<br />{username}.</h1>
+          <h1>Welcome back,<br />{greetingName}.</h1>
           <p>Keep your experience current and your next application ready.</p>
         </div>
         <HeroStats
@@ -907,7 +971,7 @@ function ProfilePage({
       <Notice message={notice} onDismiss={onDismissNotice} />
       <div className="dashboard-grid">
         <div className="dashboard-main">
-          <section className="surface-card recent-card">
+          <section className="surface-card recent-card" id="recent-resumes">
             <SectionHeading eyebrow="RESUME LIBRARY" title="Recent resumes" action="View all" onAction={() => onNavigate("Resume")} />
             <div className="resume-list">
               {resumes.slice(0, 3).map((resume, index) => (
@@ -920,7 +984,7 @@ function ProfilePage({
               {!resumes.length && <p className="muted-copy">No resumes yet. Generate one in the Resume tab.</p>}
             </div>
           </section>
-          <section className="surface-card recent-card projects-preview">
+          <section className="surface-card recent-card projects-preview" id="recent-projects">
             <SectionHeading eyebrow="SYNCED COURSEWORK" title="Recent projects" action="View all" onAction={() => onNavigate("Projects")} />
             <div className="resume-list">
               {projects.slice(0, 2).map((project) => (
@@ -933,10 +997,10 @@ function ProfilePage({
             </div>
           </section>
         </div>
-        <aside className="profile-card">
+        <aside className="profile-card" id="about-you-card">
           <div className="avatar"><span /></div>
           <Eyebrow>YOUR PROFILE</Eyebrow>
-          <h2>{profile?.fullName ?? username}</h2>
+          <h2>{displayName}</h2>
           {profile && (
             <dl>
               <div><dt>Major</dt><dd>{profile.major}</dd></div>
@@ -985,7 +1049,7 @@ function ResumePage({
       </div>
       <Notice message={notice} onDismiss={onDismissNotice} />
       <div className="resume-studio">
-        <aside className="skills-panel">
+        <aside className="skills-panel" id="resume-skills">
           <div><Eyebrow>YOUR PROFILE</Eyebrow><h2>Choose skills</h2><p>Select the strengths you want ResumeGPT to emphasize.</p></div>
           <div className="skill-list">
             {skillOptions.map((skill) => (
@@ -1040,8 +1104,8 @@ function ResumePage({
             )}
           </div>
           <form className="composer" onSubmit={onSubmit}>
-            <textarea aria-label="Describe your target role" onChange={(event) => onRoleChange(event.target.value)} placeholder="Describe the role you want to target..." rows={3} value={roleDescription} />
-            <div className="composer-footer"><span>{selectedSkills.length} skills selected</span><button className="primary-button" disabled={generating} type="submit">{generating ? "Generating..." : <>Generate resume <span aria-hidden="true">→</span></>}</button></div>
+            <textarea aria-label="Describe your target role" id="resume-role-description" onChange={(event) => onRoleChange(event.target.value)} placeholder="Describe the role you want to target..." rows={3} value={roleDescription} />
+            <div className="composer-footer"><span>{selectedSkills.length} skills selected</span><button className="primary-button" disabled={generating} id="generate-resume-button" type="submit">{generating ? "Generating..." : <>Generate resume <span aria-hidden="true">→</span></>}</button></div>
           </form>
         </section>
       </div>
@@ -1147,14 +1211,14 @@ function ProjectsPage({
               { label: "Skills", value: skills.length },
             ]}
           />
-          <div className="hero-actions"><button className="secondary-button" onClick={onImport}>Import from Canvas</button><button className="primary-button" onClick={onAdd}><span aria-hidden="true">＋</span> Add project</button></div>
+          <div className="hero-actions" id="project-actions"><button className="secondary-button" onClick={onImport}>Import from Canvas</button><button className="primary-button" onClick={onAdd}><span aria-hidden="true">＋</span> Add project</button></div>
         </div>
       </div>
       <Notice message={notice} onDismiss={onDismissNotice} />
       <section className="surface-card library-card">
         <SectionHeading eyebrow="SAVED EXPERIENCE" title="Project library" />
         <div className="library-count">{projects.length} {projects.length === 1 ? "project" : "projects"}</div>
-        <div className="filter-bar">
+        <div className="filter-bar" id="project-filters">
           <label className="search-field"><span aria-hidden="true" className="search-icon" /><input aria-label="Search projects or skills" onChange={(event) => onQueryChange(event.target.value)} placeholder="Search projects or skills" value={query} /></label>
           <label className="filter-select"><span>COURSE</span><select aria-label="Filter by course" onChange={(event) => onCourseChange(event.target.value)} value={courseFilter}><option>All courses</option>{courses.map((course) => <option key={course}>{course}</option>)}</select></label>
           <label className="filter-select"><span>SEMESTER</span><select aria-label="Filter by semester" onChange={(event) => onSemesterChange(event.target.value)} value={semesterFilter}><option>All semesters</option>{semesters.map((semester) => <option key={semester}>{semester}</option>)}</select></label>
